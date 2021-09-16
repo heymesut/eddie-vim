@@ -9,5 +9,5 @@ git submodule foreach git pull origin master
 
 # special case
 # vim-powerline : develop
-#git submodule foreach '[ "$path" = "bundle/vim-powerline" ] && branch=develop \
-  #|| branch=master; git checkout $branch'
+git submodule foreach '[ "$path" = "bundle/vim-powerline" ] && branch=develop \
+  || branch=master; git checkout $branch'
