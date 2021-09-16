@@ -30,6 +30,7 @@ set key=			                        " disable encryption
 set synmaxcol=128
 set viminfo=			                    " disable .viminfo file
 set ttyfast                           " send more chars while redrawing
+set mouse=a
 
 filetype on                           " enable filetype detection
 filetype indent on                    " enable filetype-specific indenting
