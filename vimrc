@@ -20,3 +20,11 @@ map <C-A> ggVG
 
 " V & SV & UVM syntax highlighting
 au BufNewFile,BufRead *.sv,*.svh,*.vh,*.v so ~/.vim/syntax/verilog_systemverilog.vim
+
+" interact with clipboard
+vnoremap <C-C> "+y
+nnoremap <C-V> "*p"
+
+" ctags setting
+set tags=./tags;/
+map <C-\> :tab split<CR>:exec("tag ".expand("<cword>"))<CR>
