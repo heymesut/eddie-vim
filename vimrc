@@ -28,3 +28,6 @@ nnoremap <C-V> "*p"
 " ctags setting
 set tags=./tags;/
 map <C-\> :tab split<CR>:exec("tag ".expand("<cword>"))<CR>
+
+" fix ack search results leak into terminal
+set shellpipe=>
