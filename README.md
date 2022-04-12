@@ -1,22 +1,8 @@
-## Update!
-I recently removed and reorganized redundant settings and plugins, and put it on another repository https://github.com/kaochenlong/eddie-vim2
 
 ## Intro
 My personal Vim configurations and some plugins which I used in my daily job.
 
 I put Vim related settings in `plugin/settings/Settings.vim`, and isolate other plugins' settings in `plugin/settings` directory.
-
-You may notice that there are several vimrc files:
-
-1. `vimrc`, standard version vimrc.
-
-2. `easy-vimrc`, same as vimrc, but add some easier key mapping for new Vimer.
-
-3. `pro-vimrc`, same as vimrc, but remove the arrow keys mapping.
-
-4. `experimental-vimrc`, same as pro-vimrc, but just for experimental purpose.
-
-you can link your `~/.vimrc` to any one of them as you wish :)
 
 It's how my Vim looks now:
 
@@ -63,17 +49,13 @@ If you already install `git` in your machine, and you trust me and my automatic 
 
         ln -s .vim/vimrc .vimrc
 
-7. if you're still not familiar with the movement in vim by HJKL or yanking and pasting text, I've made a easier version:
-
-        ln -s .vim/easy-vimrc .vimrc
-
-8. if you use GUI version VIM, such as MacVim or GVim, you can also link to `.gvimrc`:
+7. if you use GUI version VIM, such as MacVim or GVim, you can also link to `.gvimrc`:
 
         ln -s eddie-vim/gvimrc .gvimrc
 
-9. if you use Airline under Ubuntu or something which can not show the correct icons/fonts on the bottom, you can check [this link](https://github.com/Lokaltog/powerline-fonts), patch the font and it should look pretty nice.
+8. if you use Airline under Ubuntu or something which can not show the correct icons/fonts on the bottom, you can check [this link](https://github.com/Lokaltog/powerline-fonts), patch the font and it should look pretty nice.
 
-10. you may need to install `ack` or `silver searcher` first if you use `ack.vim`.
+9.  you may need to install `ack` or `silver searcher` first if you use `ack.vim`.
 
 ### Update:
 
@@ -98,17 +80,21 @@ change directory to `~/.vim` and execute `./update.sh` script, it should do all 
     e. `<F7>` to switch to previous tab, and `<F8>` to the next tab.
 
     f. hit `<ctrl>p` will launch a quick window to match keywords from your current working directory, not only file name, but also path name. And `<ctrl>w u` will match from your MRU(Mostly Recent Used) files, which is also frequently used.
+    
+    g. hit `: Ack` will launch ack.
 
-    g. hit `<leader>` twice to toggle comment on and off.
+    h. hit `<leader>` twice to toggle comment on and off.
 
-    h. `<tab>` and `<shift><tab>` to increase and decrease the syntax identation.
+    i. `<tab>` and `<shift><tab>` to increase and decrease the syntax identation.
 
+    j. `<leader>v` to open `.vimrc` in a new tab.
 
-    i. `<leader>v` to open `.vimrc` in a new tab.
-
-    j. `<leader>0` to edit or create `README.md` in current working directory.
+    k. `<leader>0` to edit or create `README.md` in current working directory.
 
 4. Remove tailing whitespace automatically while saving.
+5. Support UVM syntax highlight.
+6. Support [ale](https://github.com/dense-analysis/ale) lint check.
+7. Support Verilog automatic. You can refer to [here](https://github.com/HonkW93/automatic-verilog) for more details.
 
 ## FAQ
 
