@@ -10,7 +10,7 @@
 " Authors:
 "   Amit Sethi     <amitrajsethi@yahoo.com>
 "   Amal Khailtash <akhailtash@rogers.com>
-"   Khalid Siddiqi <khalid2@yahoo.com> 
+"   Khalid Siddiqi <khalid2@yahoo.com>
 "
 " Credits:
 "   Originally created by
@@ -30,11 +30,11 @@
 "         http://verifideas.blogspot.com/2008/09/better-syntax-highlighting-in.html
 "     Khalid Siddiqi <khalid2@yahoo.com> Sun Mar  6 21:11:18 PST 2011
 "       Version 3.0
-"       Converted OVM 2.0 version to UVM 
+"       Converted OVM 2.0 version to UVM
 
 " Extends Verilog syntax
 " Requires $VIMRUNTIME/syntax/verilog.vim to exist
-" For more info on setting $VIMRUNTIME etc. see: 
+" For more info on setting $VIMRUNTIME etc. see:
 " http://vimdoc.sourceforge.net/htmldoc/syntax.html
 
 " For version 5.x: Clear all syntax items
@@ -43,8 +43,6 @@
 
 if version < 600
    syntax clear
-elseif exists("b:current_syntax")
-   finish
 endif
 
 
@@ -70,7 +68,7 @@ syn keyword verilogStatement   package endpackage
 syn keyword verilogStatement   rand randc constraint randomize
 syn keyword verilogStatement   with inside dist
 syn keyword verilogStatement   randcase
-syn keyword verilogStatement   sequence endsequence randsequence 
+syn keyword verilogStatement   sequence endsequence randsequence
 syn keyword verilogStatement   get_randstate set_randstate
 syn keyword verilogStatement   srandom
 syn keyword verilogStatement   logic bit byte time
@@ -203,10 +201,10 @@ syn match   verilogAssertion   "\<\w\+\>\s*:\s*\<assert\>\_.\{-});"
 " UVM
 "syn match   uvmClass           "\<uvm_\w\+\>"
 "syn match   uvmClass           "\<uvm_tlm_\w\+\>"
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
-"syn keyword uvmMethodGlobal      
-"syn keyword uvmDeprecatedMethod  
+"syn keyword uvmClass
+"syn keyword uvmMethod
+"syn keyword uvmMethodGlobal
+"syn keyword uvmDeprecatedMethod
 
 "-------------------------------------------------------------------------------
 " uvm_sv/src/base/
@@ -444,48 +442,48 @@ syn keyword uvmCompatibility     avm_report_error avm_report_fatal avm_report_me
 syn keyword uvmCompatibility     analysis_fifo avm_transport_imp avm_analysis_imp avm_port_base
 
 " uvm_sv/src/base/compatibility/base_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_macro_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_message.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_message_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_message_defines.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_meth_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_port_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 " uvm_sv/src/base/compatibility/urm_type_compatibility.svh
-"syn keyword uvmClass             
-"syn keyword uvmMethod            
+"syn keyword uvmClass
+"syn keyword uvmMethod
 
 "-------------------------------------------------------------------------------
 " uvm_sv/src/methodology/
@@ -753,7 +751,7 @@ if version >= 508 || !exists("did_verilog_syn_inits")
    HiLink verilogTypeDef         TypeDef
    HiLink verilogAssertion       Include
 
-   HiLink uvmClass               Type
+   HiLink uvmClass               Statement
    HiLink uvmTypeDef             Type
    HiLink uvmMethod              Function
    HiLink uvmMethodGlobal        Function
@@ -765,7 +763,7 @@ if version >= 508 || !exists("did_verilog_syn_inits")
    delcommand HiLink
 endif
 
-let b:current_syntax = "verilog_systemverilog"
+let b:current_syntax = "systemverilog"
 
 " vim: ts=8
 
