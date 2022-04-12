@@ -61,3 +61,6 @@
 [submodule "bundle/tlib_vim"]
 	path = bundle/tlib_vim
 	url = git@github.com:tomtom/tlib_vim.git
+[submodule "bundle/ale"]
+	path = bundle/ale
+	url = https://github.com/dense-analysis/ale.git

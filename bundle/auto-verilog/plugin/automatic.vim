@@ -1,11 +1,12 @@
 "-----------------------------------------------------------------------------
-" Vim Plugin for Verilog Code Automactic Generation
+" Vim Plugin for Verilog Code Automactic Generation 
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2021/12/14 00:26
+" Last Modified:  2022/03/30 21:42
+" File:           automatic.vim
 " Note:           1. Auto function based on zhangguo's vimscript, heavily modified
 "                 2. Rtl Tree based on zhangguo's vimscript, slightly modified
-"                    https://www.vim.org/scripts/script.php?script_id=4067
+"                    https://www.vim.org/scripts/script.php?script_id=4067 
 "                 3. Progress bar based off code from "progressbar widget" plugin by
 "                    Andreas Politz, slightly modified:
 "                    http://www.vim.org/scripts/script.php?script_id=2006
@@ -20,6 +21,7 @@
 " 2021/8/1      HonkW           1.1.6                   Add modified verision of RtlTree
 " 2021/9/14     HonkW           1.2.4                   Prototype of AutoDef
 " 2021/11/20    HonkW           1.2.5                   Prototype of AutoArg
+" 2022/2/15     HonkW           1.2.6                   Prototype of filelist & tags support
 " For vim version 7.x or above
 "-----------------------------------------------------------------------------
 
@@ -32,7 +34,7 @@
 let s:ata_st_pos = 4
 let s:ata_st_prefix = repeat(' ',s:ata_st_pos)
 "symbol position
-let s:ata_sym_pos_max = 32
+let s:ata_sym_pos_max = 32 
 "}}}3
 
 "AutoInst {{{3
@@ -40,9 +42,9 @@ let s:ata_sym_pos_max = 32
 let s:ati_st_pos = 4
 let s:ati_st_prefix = repeat(' ',s:ati_st_pos)
 "name position
-let s:ati_name_pos_max = 32
+let s:ati_name_pos_max = 32 
 "symbol position
-let s:ati_sym_pos_max = 64
+let s:ati_sym_pos_max = 64 
 "}}}3
 
 "AutoPara{{{3
@@ -50,9 +52,9 @@ let s:ati_sym_pos_max = 64
 let s:atp_st_pos = 4
 let s:atp_st_prefix = repeat(' ',s:atp_st_pos)
 "name position
-let s:atp_name_pos_max = 32
+let s:atp_name_pos_max = 32 
 "symbol position
-let s:atp_sym_pos_max = 64
+let s:atp_sym_pos_max = 64 
 "}}}3
 
 "AutoReg{{{3
@@ -60,9 +62,9 @@ let s:atp_sym_pos_max = 64
 let s:atr_st_pos = 4
 let s:atr_st_prefix = repeat(' ',s:atr_st_pos)
 "name position
-let s:atr_name_pos_max = 32
+let s:atr_name_pos_max = 32 
 "symbol position
-let s:atr_sym_pos_max = 64
+let s:atr_sym_pos_max = 64 
 "}}}3
 
 "AutoWire{{{3
@@ -70,9 +72,9 @@ let s:atr_sym_pos_max = 64
 let s:atw_st_pos = 4
 let s:atw_st_prefix = repeat(' ',s:atw_st_pos)
 "name position
-let s:atw_name_pos_max = 32
+let s:atw_name_pos_max = 32 
 "symbol position
-let s:atw_sym_pos_max = 64
+let s:atw_sym_pos_max = 64 
 "}}}3
 
 "AutoDef{{{3
@@ -81,6 +83,16 @@ let s:atd_st_pos = 4
 let s:atd_st_prefix = repeat(' ',s:atd_st_pos)
 "}}}3
 
+"}}}2
+
+"CrossDir 跨文件夹配置{{{2
+let s:atv_cd_mode = get(g:,'atv_cd_mode',0)                             "0:normal 1:filelist 2:tags
+"filelist
+let s:atv_cd_flist_browse = get(g:,'atv_cd_flist_browse',1)             "browse filelist file
+let s:atv_cd_flist_file = get(g:,'atv_cd_flist_file','')                "flistfile like ./filelist.f
+"tags
+let s:atv_cd_tags_browse = get(g:,'atv_cd_tags_browse',1)               "browse tag file
+let s:atv_cd_tags_file = get(g:,'atv_cd_tags_file','')                  "tag like ./tags
 "}}}2
 
 "AutoArg 自动声明配置{{{2
@@ -103,6 +115,8 @@ let s:ati_incl_ifdef = get(g:,'ati_incl_ifdef',1)           "include ifdef like 
 let s:ati_95_support = get(g:,'ati_95_support',0)           "Support Verilog-1995
 let s:ati_tail_not_align = get(g:,'ati_tail_not_align',0)   "don't do alignment in tail when autoinst
 let s:ati_add_dir = get(g:,'ati_add_dir',0)                 "add //Instance ...directory...
+let s:ati_add_dir_keep = get(g:,'ati_add_dir_keep',0)       "directory keep original format(ENV VAR like $HOME)
+let s:ati_io_dir_name = get(g:,'ati_io_dir_name','input output inout') "default io_dir name, can be changed to 'I O IO'
 "}}}2
 
 "AutoPara 自动参数配置{{{2
@@ -137,26 +151,16 @@ let s:atw_remove_io = get(g:,'atw_remove_io',1)             "remove declared io 
 let s:atd_move = get(g:,'atd_move',0)                       "move declared define(reg/wire) from other parts to places down below autodef
 "}}}2
 
-"Progressbar 进度条支持{{{2
+"{{{2 Debug
+
+"{{{3 debug注释行
+let s:skip_cmt_debug = 0
+"}}}3
+
+"Progressbar 进度条支持{{{3
 let s:atv_pb_en = 0
-"}}}2
+"}}}3
 
-"Timing Wave 定义波形{{{2
-let s:sig_offset = 13           "signal offset
-"let s:sig_offset = 13+4         "signal offset (0 is clk posedge, 4 is clk negedge)
-let s:clk_period = 8            "clock period
-let s:clk_num = 16              "number of clocks generated
-let s:cq_trans = 1              "signal transition started n spaces after clock transition
-let s:wave_max_wd = s:sig_offset + s:clk_num*s:clk_period       "maximum width
-"}}}2
-
-"Header 定义头文件{{{2
-let s:author = get(g:,'atv_author','HonkW')
-let s:company = get(g:,'atv_company','')
-let s:project = get(g:,'atv_prject','IC_Design')
-let s:device = get(g:,'atv_device','Xilinx')
-let s:email = get(g:,'atv_email','contact@honk.wang')
-let s:website = get(g:,'atv_website','https://honk.wang')
 "}}}2
 
 " Verilog Type 定义Verilog变量类型{{{2
@@ -238,20 +242,20 @@ let s:not_keywords_pattern = s:VlogKeyWords . '\@!\(\<\w\+\>\)'
 
 "}}}1
 
-"Version 启动判断{{{1
-if version < 704        "如果vim版本低于7.4则无效,写法为 if v:version < 704,代表版本低于7.4
-    echohl ErrorMsg | echo "automatic-verilog: this plugin requires vim >= 7.4. "| echohl None
-   finish
+"Sanity checks 启动判断{{{1
+if exists("g:loaded_automatic_verilog_plugin")
+    finish
 endif
-if exists("vlog_plugin")
-   finish
-endif
-let vlog_plugin = 1
-"}}}1
+let g:loaded_automatic_verilog_plugin = 1
 
-"Update 记录脚本更新{{{1
-autocmd BufWrite automatic.vim call UpdateVimscriptLastModifyTime()
-function UpdateVimscriptLastModifyTime()
+if v:version < 703        "如果vim版本低于7.3则无效,写法为 if v:version < 704,代表版本低于7.4
+    echohl ErrorMsg | echo "automatic-verilog: this plugin requires vim >= 7.3. "| echohl None
+    finish
+endif
+
+"Record update 记录脚本更新
+autocmd BufWrite automatic.vim call s:UpdateVimscriptLastModifyTime()
+function s:UpdateVimscriptLastModifyTime()
     let line = getline(5)
     if line =~ '\" Last Modified'
         call setline(5,"\" Last Modified:  " . strftime("%Y/%m/%d %H:%M"))
@@ -260,34 +264,6 @@ endfunction
 "}}}1
 
 "Keys 快捷键{{{1
-
-"Menu 菜单栏{{{2
-
-"TimingWave 时序波形{{{3
-amenu &Verilog.Wave.AddClk                                              :call AddClk()<CR>
-amenu &Verilog.Wave.AddSig                                              :call AddSig()<CR>
-amenu &Verilog.Wave.AddBus                                              :call AddBus()<CR>
-amenu &Verilog.Wave.AddBlk                                              :call AddBlk()<CR>
-amenu &Verilog.Wave.AddNeg                                              :call AddNeg()<CR>
-amenu &Verilog.Wave.-Operation-                                         :
-amenu &Verilog.Wave.Invert<TAB><C-F8>                                   :call Invert()<CR>
-"}}}3
-
-"Code Snippet 代码段{{{3
-amenu &Verilog.Code.Always@.always\ @(posedge\ or\ posedge)<TAB><;al>   :call AlBpp()<CR>
-amenu &Verilog.Code.Always@.always\ @(posedge\ or\ negedge)             :call AlBpn()<CR>
-amenu &Verilog.Code.Always@.always\ @(*)                                :call AlB()<CR>
-amenu &Verilog.Code.Always@.always\ @(negedge\ or\ negedge)             :call AlBnn()<CR>
-amenu &Verilog.Code.Always@.always\ @(posedge)                          :call AlBp()<CR>
-amenu &Verilog.Code.Always@.always\ @(negedge)                          :call AlBn()<CR>
-amenu &Verilog.Code.Header.AddHeader<TAB><;hd>                          :call AddHeader()<CR>
-amenu &Verilog.Code.Comment.SingleLineComment<TAB><;//>                 :call AutoComment()<CR>
-amenu &Verilog.Code.Comment.MultiLineComment<TAB>Visual-Mode\ <;/*>     :call AutoComment2()<CR>
-amenu &Verilog.Code.Comment.CurLineAddComment<TAB><;/$>                 :call AddCurLineComment()<CR>
-amenu &Verilog.Code.Template.LoadTemplate<TAB>                          :call LoadTemplate()<CR>
-"}}}3
-
-"Auto 自动化{{{3
 amenu &Verilog.AutoArg.AutoArg()<TAB>                                   :call AutoArg()<CR>
 amenu &Verilog.AutoInst.AutoInst(1)<TAB>All                             :call AutoInst(1)<CR>
 amenu &Verilog.AutoInst.AutoInst(0)<TAB>One                             :call AutoInst(0)<CR>
@@ -302,18 +278,10 @@ amenu &Verilog.AutoDef.AutoDef()<TAB>                                   :call Au
 amenu &Verilog.AutoDef.AutoReg()<TAB>                                   :call AutoReg()<CR>
 amenu &Verilog.AutoDef.AutoWire()<TAB>                                  :call AutoWire()<CR>
 
-"}}}3
-
-"}}}2
-
 "Keyboard 键盘快捷键{{{2
 
 "Insert Time 插入时间{{{3
 imap <F2> <C-R>=strftime("%Y/%m/%d")<CR>
-"}}}3
-
-"Invert Wave 时序波形翻转{{{3
-map <C-F8>      :call Invert()<ESC>
 "}}}3
 
 "Auto 自动化 {{{3
@@ -340,597 +308,6 @@ if !hasmapto(':call AutoDef()<ESC>')
 endif
 "}}}3
 
-"Code Snippet 代码段{{{3
-"Add Always 添加always块
-map ;al         :call AlBpp()<CR>i
-"Add Header 添加文件头
-map ;hd         :call AddHeader()<CR>
-"Add Comment 添加注释
-map ;//         :call AutoComment()<ESC>
-map ;/*         <ESC>:call AutoComment2()<ESC>
-map ;/$         :call AddCurLineComment()<ESC>
-"}}}3
-
-"}}}2
-
-"}}}1
-
-"Function 功能函数{{{1
-
-"TimingWave 时序波形{{{2
-
-function AddClk() "{{{3
-    let ret = []
-    let ret0 = "//  .   .   ."
-    let ret1 = "//          +"
-    let ret2 = "// clk      |"
-    let ret3 = "//          +"
-    let format = '%' . s:clk_period/2 . 'd'
-    for idx in range(1,s:clk_num)
-        let ret0 = ret0 . printf(format,idx) . repeat(' ',s:clk_period/2)
-        let ret1 = ret1 . repeat('-',s:clk_period/2-1)
-        let ret2 = ret2 . repeat(' ',s:clk_period/2-1)
-        let ret3 = ret3 . repeat(' ',s:clk_period/2-1)
-        let ret1 = ret1 . '+'
-        let ret2 = ret2 . '|'
-        let ret3 = ret3 . '+'
-        let ret1 = ret1 . repeat(' ',s:clk_period/2-1)
-        let ret2 = ret2 . repeat(' ',s:clk_period/2-1)
-        let ret3 = ret3 . repeat('-',s:clk_period/2-1)
-        let ret1 = ret1 . '+'
-        let ret2 = ret2 . '|'
-        let ret3 = ret3 . '+'
-    endfor
-    call add(ret,ret0)
-    call add(ret,ret1)
-    call add(ret,ret2)
-    call add(ret,ret3)
-    let lnum = line(".")
-    let col = col(".")
-    call append(line("."),ret)
-    call cursor(lnum+4,col)
-endfunction
-"}}}3
-
-function AddSig() "{{{3
-    let ret = []
-    let ret0 = "//          "
-    let ret1 = "// sig      "
-    let ret2 = "//          "
-    let ret0 = ret0 . repeat(' ',s:clk_num*s:clk_period+1)
-    let ret1 = ret1 . repeat(' ',s:clk_num*s:clk_period+1)
-    let ret2 = ret2 . repeat('-',s:clk_num*s:clk_period+1)
-    call add(ret,ret0)
-    call add(ret,ret1)
-    call add(ret,ret2)
-    let lnum = line(".")
-    let col = col(".")
-    call append(line("."),ret)
-    call cursor(lnum+3,col)
-endfunction "}}}3
-
-function AddBus() "{{{3
-    let ret = []
-    let ret0 = "//          "
-    let ret1 = "// bus      "
-    let ret2 = "//          "
-    let ret0 = ret0 . repeat('-',s:clk_num*s:clk_period+1)
-    let ret1 = ret1 . repeat(' ',s:clk_num*s:clk_period+1)
-    let ret2 = ret2 . repeat('-',s:clk_num*s:clk_period+1)
-    call add(ret,ret0)
-    call add(ret,ret1)
-    call add(ret,ret2)
-    let lnum = line(".")
-    let col = col(".")
-    call append(line("."),ret)
-    call cursor(lnum+3,col)
-endfunction "}}}3
-
-function AddNeg() "{{{3
-    let lnum = s:GetSigNameLineNum()
-    if lnum == -1
-        return
-    endif
-    let line = getline(lnum)
-    if line =~ 'neg\s*$'
-        return
-    endif
-    call setline(lnum,line." neg")
-endfunction "}}}3
-
-function AddBlk() "{{{3
-    let ret = []
-    let ret0 = "//          "
-    let ret0 = ret0 . repeat(' ',s:clk_num*s:clk_period+1)
-    call add(ret,ret0)
-    let lnum = line(".")
-    let col = col(".")
-    call append(line("."),ret)
-    call cursor(lnum+1,col)
-endfunction "}}}3
-
-function Invert() "{{{3
-"   e.g
-"   clk_period = 8
-"   clk_num = 16
-"   cq_trans = 1
-"
-"1  .   .   .   1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16
-"2          +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +
-"3 clk      |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
-"4          +   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+   +---+
-"5
-"6                           +-------+
-"7 sig                       |*      |
-"8          -----------------+       +-------------------------------------------------------------------------------------------------------
-"1.........13..............29......37
-"
-    let lnum = s:GetSigNameLineNum()    "7
-    if lnum == -1
-        return
-    endif
-
-    let top = getline(lnum-1)   "line 6
-    let mid = getline(lnum)     "line 7
-    let bot = getline(lnum+1)   "line 8
-
-    let signeg = s:SigIsNeg()                   "detect negative marker
-    let posedge = s:GetPosedge(signeg)          "detect nearest posedge     29
-    let negedge = posedge + s:clk_period/2      "detect next negedge        33
-    let next_posedge = posedge + s:clk_period   "detect next posedge        37
-
-    let last = s:SigLastClkIsHigh(lnum,posedge,negedge)     "detect line 6, col 29 is not '-'   last = 0
-    let cur = s:SigCurClkIsHigh(lnum,posedge,negedge)       "detect line 6, col 33 is '-'       cur = 1
-    let next = s:SigNextClkIsHigh(lnum,posedge,negedge)     "detect line 6, col 37 is '-'       next = 1
-    let chg = s:BusCurClkHaveChg(lnum,posedge,negedge)      "judge if bus marker 'X' to see if already changed
-
-    "from 0 to posedge+cq_trans-1{{{4
-    let res_top = strpart(top,0,posedge+s:cq_trans-1)
-    let res_mid = strpart(mid,0,posedge+s:cq_trans-1)
-    let res_bot = strpart(bot,0,posedge+s:cq_trans-1)
-    "}}}4
-
-    "from posedge+cq_trans to (posedge+clk_period)(i.e.next_posedge)+cq_trans-1{{{4
-    let init_top_char = ' '
-    let init_mid_char = ' '
-    let init_bot_char = ' '
-    let top_char = ' '
-    let mid_char = ' '
-    let bot_char = ' '
-    let is_bus = 0
-
-    if top[negedge] =~ '-' && bot[negedge] =~ '-'           "two lines, must be bus
-        let is_bus = 1
-        if chg
-            let init_top_char = '-'
-            let init_mid_char = ' '
-            let init_bot_char = '-'
-        else
-            let init_top_char = ' '
-            let init_mid_char = 'X'
-            let init_bot_char = ' '
-        endif
-        let top_char = '-'
-        let mid_char = ' '
-        let bot_char = '-'
-        let res_top = res_top . init_top_char
-        let res_mid = res_mid . init_mid_char
-        let res_bot = res_bot . init_bot_char
-        for idx in range(1,s:clk_period-1)
-            let res_top = res_top . top_char
-            let res_mid = res_mid . mid_char
-            let res_bot = res_bot . bot_char
-        endfor
-    else                                                    "one line or none, signal
-        if last == cur
-            if cur                                          "last=1 cur=1 both high
-                let init_top_char = '+'
-                let init_mid_char = '|'
-                let init_bot_char = '+'
-                let top_char = ' '
-                let bot_char = '-'
-            else
-                let init_top_char = '+'                     "last=0 cur=0 both low
-                let init_mid_char = '|'
-                let init_bot_char = '+'
-                let top_char = '-'
-                let bot_char = ' '
-            endif
-        else
-            if cur                                          "last=0 cur=1 posedge
-                let init_top_char = ' '
-                let init_mid_char = ' '
-                let init_bot_char = '-'
-                let top_char = ' '
-                let bot_char = '-'
-            else
-                let init_top_char = '-'                     "last=1 cur=0 negedge
-                let init_mid_char = ' '
-                let init_bot_char = ' '
-                let top_char = '-'
-                let bot_char = ' '
-            endif
-        endif
-
-        let res_top = res_top . init_top_char
-        let res_mid = res_mid . init_mid_char
-        let res_bot = res_bot . init_bot_char
-        for idx in range(1,s:clk_period-1)
-            let res_top = res_top . top_char
-            let res_mid = res_mid . mid_char
-            let res_bot = res_bot . bot_char
-        endfor
-
-        if next == cur                                      "cur=next=1 or 0
-            let init_top_char = '+'
-            let init_mid_char = '|'
-            let init_bot_char = '+'
-        else
-            if cur
-                let init_top_char = ' '
-                let init_mid_char = ' '
-                let init_bot_char = '-'
-            else
-                let init_top_char = '-'
-                let init_mid_char = ' '
-                let init_bot_char = ' '
-            endif
-        endif
-        let res_top = res_top . init_top_char
-        let res_mid = res_mid . init_mid_char
-        let res_bot = res_bot . init_bot_char
-    endif
-    "}}}4
-
-    "from posedge+clk_period+cq_trans to max{{{4
-    let res_top = res_top .strpart(top,posedge+s:cq_trans+s:clk_period-is_bus,s:wave_max_wd-1)
-    let res_mid = res_mid .strpart(mid,posedge+s:cq_trans+s:clk_period-is_bus,s:wave_max_wd-1)
-    let res_bot = res_bot .strpart(bot,posedge+s:cq_trans+s:clk_period-is_bus,s:wave_max_wd-1)
-    "}}}4
-
-    call setline(lnum-1,res_top)
-    call setline(lnum,res_mid)
-    call setline(lnum+1,res_bot)
-
-endfunction
-"}}}3
-
-"Sub-Funciton-For-Invert(){{{3
-
-function s:GetSigNameLineNum() "{{{4
-    let lnum = -1
-    let cur_lnum = line(".")
-    if getline(cur_lnum) =~ '^\/\/\s*\(sig\|bus\)'
-        let lnum = cur_lnum
-    elseif getline(cur_lnum-1) =~ '^\/\/\s*\(sig\|bus\)'
-        let lnum = cur_lnum-1
-    elseif getline(cur_lnum+1) =~ '^\/\/\s*\(sig\|bus\)'
-        let lnum = cur_lnum+1
-    endif
-    return lnum
-endfunction "}}}4
-
-function s:GetPosedge(signeg) "{{{4
-    "calculate the width between col(".") and the nearest posedge
-    if a:signeg == 0
-        let ret = col(".") - s:sig_offset
-        while 1
-            if ret >= s:clk_period
-                let ret = ret - s:clk_period
-            else
-                break
-            endif
-        endwhile
-        return col(".") - ret
-    else
-        let ret = col(".") - s:sig_offset + s:clk_period/2
-        while 1
-            if ret >= s:clk_period
-                let ret = ret - s:clk_period
-            else
-                break
-            endif
-        endwhile
-        return col(".") - ret
-    endif
-endfunction "}}}4
-
-function s:SigLastClkIsHigh(lnum,posedge,negedge) "{{{4
-    let ret = 0
-    let line = getline(a:lnum - 1)
-    if line[a:posedge-1] =~ '-'
-        let ret = 1
-    endif
-    return ret
-endfunction "}}}4
-
-function s:SigCurClkIsHigh(lnum,posedge,negedge) "{{{4
-    let ret = 0
-    let line = getline(a:lnum - 1)
-    if line[a:negedge-1] =~ '-'
-        let ret = 1
-    endif
-    return ret
-endfunction "}}}4
-
-function s:SigNextClkIsHigh(lnum,posedge,negedge) "{{{4
-    let ret = 0
-    let line = getline(a:lnum - 1)
-    if line[a:negedge+s:clk_period-1] =~ '-'
-        let ret = 1
-    endif
-    return ret
-endfunction "}}}4
-
-function s:BusCurClkHaveChg(lnum,posedge,negedge) "{{{4
-    let ret = 0
-    let line = getline(a:lnum)
-    if line[a:posedge+s:cq_trans-1] =~ 'X'
-        let ret = 1
-    endif
-    return ret
-endfunction "}}}4
-
-function s:SigIsNeg() "{{{4
-    let ret = 0
-    let lnum = s:GetSigNameLineNum()
-    if getline(lnum) =~ 'neg\s*$'
-        let ret = 1
-    endif
-    return ret
-endfunction "}}}4
-
-"}}}3
-
-"}}}2
-
-"AutoTemplate 快速新建.v文件{{{2
-
-autocmd BufNewFile *.v call AutoTemplate()
-
-function AutoTemplate() "{{{3
-    let filename = expand("%")
-    let modulename = matchstr(filename,'\w\+')
-    call AddHeader()
-    call append(22, "`timescale 1ns/1ps")
-    call append(23, "")
-    call append(24, "module " . modulename  )
-    call append(25, "(")
-    call append(26, "clk")
-    call append(27, "rst")
-    call append(28, ");")
-    call append(29, "")
-    call append(30, "endmodule")
-endfunction "}}}3
-
-"}}}2
-
-"Update Last Modify Time 更新写入时间{{{2
-
-autocmd BufWrite *.v call UpdateLastModifyTime()
-autocmd BufWrite *.sv call UpdateLastModifyTime()
-
-function UpdateLastModifyTime() "{{{3
-    let line = getline(8)
-    if line =~ '// Last Modified'
-        call setline(8,"// Last Modified : " . strftime("%Y/%m/%d %H:%M"))
-    endif
-endfunction "}}}3
-
-"}}}2
-
-"Code Snippet 代码段{{{2
-
-function AddHeader() "{{{3
-    let line = getline(1)
-    if line =~ '// +FHDR'               "已有文件头的文件不再添加
-        return
-    endif
-
-    let author = s:author
-    let company = s:company
-    let project = s:project
-    let device = s:device
-    let email = s:email
-    let website = s:website
-
-    let filename = expand("%")          "记录当前文件名
-    let timelen = strlen(strftime("%Y/%m/%d"))
-    let authorlen = strlen(author)
-
-    call append(0 , "// +FHDR----------------------------------------------------------------------------")
-    call append(1 , "// Project Name  : ".project)
-    call append(2 , "// Device        : ".device)
-    call append(3 , "// Author        : ".author)
-    call append(4 , "// Email         : ".email)
-    call append(5 , "// Website       : ".website)
-    call append(6 , "// Create On     : ".strftime("%Y/%m/%d %H:%M"))
-    call append(7 , "// Last Modified : ".strftime("%Y/%m/%d %H:%M"))
-    call append(8 , "// File Name     : ".filename)
-    call append(9 , "// Description   :")
-    call append(10, "//         ")
-    call append(11, "// ")
-    call append(12, "// Copyright (c) ".strftime("%Y ") . company . ".")
-    call append(13, "// ALL RIGHTS RESERVED")
-    call append(14, "// ")
-    call append(15, "// ---------------------------------------------------------------------------------")
-    call append(16, "// Modification History:")
-    call append(17, "// Date         By              Version                 Change Description")
-    call append(18, "// ---------------------------------------------------------------------------------")
-    call append(19, "// ".strftime("%Y/%m/%d").repeat(" ", 13-timelen).author.repeat(" ", 16-authorlen)."1.0                     Original")
-    call append(20, "// ")
-    call append(21, "// -FHDR----------------------------------------------------------------------------")
-    call cursor(11,10)
-
-endfunction "}}}3
-
-function AlBpp() "{{{3
-    let lnum = line(".")
-    for idx in range(1,8)
-        call append(lnum,"")
-    endfor
-    call setline(lnum+1,"    always@(posedge clk or posedge rst)")
-    call setline(lnum+2,"    begin")
-    call setline(lnum+3,"        if(rst)begin")
-    call setline(lnum+4,"             ")
-    call setline(lnum+5,"        end")
-    call setline(lnum+6,"        else begin")
-    call setline(lnum+7,"             ")
-    call setline(lnum+8,"        end")
-    call setline(lnum+9,"    end")
-    call cursor(lnum+4,13)
-endfunction "}}}3
-
-function AlBpn() "{{{3
-    let lnum = line(".")
-    for idx in range(1,11)
-        call append(lnum,"")
-    endfor
-    call setline(lnum+1 ,"    always@(posedge clk or negedge rst_n)")
-    call setline(lnum+2 ,"    begin")
-    call setline(lnum+3 ,"        if(!rst_n)begin")
-    call setline(lnum+4 ,"            ")
-    call setline(lnum+5 ,"        end ")
-    call setline(lnum+6 ,"        else if()begin")
-    call setline(lnum+7 ,"            ")
-    call setline(lnum+8 ,"        end")
-    call setline(lnum+9 ,"        else begin")
-    call setline(lnum+10,"            ")
-    call setline(lnum+11,"        end")
-    call setline(lnum+12,"    end")
-    call cursor(lnum+3,13)
-endfunction "}}}3
-
-function AlB() "{{{3
-    let lnum = line(".")
-    for idx in range(1,3)
-        call append(lnum,"")
-    endfor
-    call setline(lnum+1 ,"    always@(*)")
-    call setline(lnum+2 ,"    begin")
-    call setline(lnum+3 ,"        ")
-    call setline(lnum+4 ,"    end")
-    call cursor(lnum+2,9)
-endfunction "}}}3
-
-function AlBnn() "{{{3
-    let lnum = line(".")
-    for idx in range(1,11)
-        call append(lnum,"")
-    endfor
-    call setline(lnum+1 ,"    always@(negedge clk or negedge rst_n)")
-    call setline(lnum+2 ,"    begin")
-    call setline(lnum+3 ,"        if(!rst_n) begin")
-    call setline(lnum+4 ,"            ")
-    call setline(lnum+5 ,"        end")
-    call setline(lnum+6 ,"        else if()begin")
-    call setline(lnum+7 ,"            ")
-    call setline(lnum+8 ,"        end")
-    call setline(lnum+9 ,"        else begin")
-    call setline(lnum+10,"            ")
-    call setline(lnum+11,"        end")
-    call setline(lnum+12,"    end")
-    call cursor(lnum+3,13)
-endfunction "}}}3
-
-function AlBp() "{{{3
-    let lnum = line(".")
-    for idx in range(1,8)
-        call append(lnum,"")
-    endfor
-    call setline(lnum+1,"    always@(posedge clk)")
-    call setline(lnum+2,"    begin")
-    call setline(lnum+3,"        if()begin")
-    call setline(lnum+4,"            ")
-    call setline(lnum+5,"        end")
-    call setline(lnum+6,"        else begin")
-    call setline(lnum+7,"            ")
-    call setline(lnum+8,"        end")
-    call setline(lnum+9,"    end")
-    call cursor(lnum+3,13)
-endfunction "}}}3
-
-function AlBn() "{{{3
-    let lnum = line(".")
-    for idx in range(1,8)
-        call append(lnum,"")
-    endfor
-    call setline(lnum+1,"    always@(negedge clk)")
-    call setline(lnum+2,"    begin")
-    call setline(lnum+3,"        if()begin")
-    call setline(lnum+4,"            ")
-    call setline(lnum+5,"        end")
-    call setline(lnum+6,"        else begin")
-    call setline(lnum+7,"            ")
-    call setline(lnum+8,"        end")
-    call setline(lnum+9,"    end")
-    call cursor(lnum+3,13)
-endfunction "}}}3
-
-function AutoComment() "{{{3
-    let lnum = line(".")
-    let line = getline(lnum)
-
-    if line =~ '^\/\/ by .* \d\d\d\d-\d\d-\d\d'
-        let tmp_line = substitute(line,'^\/\/ by .* \d\d\d\d-\d\d-\d\d | ','','')
-    else
-        let tmp_line = '// by ' . s:author . ' ' . strftime("%Y-%m-%d") . ' | ' . line
-    endif
-    call setline(lnum,tmp_line)
-endfunction "}}}3
-
-function AutoComment2() "{{{3
-    let col = col(".")
-    let lnum = line(".")
-
-    if line("'<") == lnum || line("'>") == lnum
-        if getline(line("'<")) =~ '^/\*'
-            '<
-            execute "normal dd"
-            '>
-            execute "normal dd"
-            if lnum != line("'<")
-                let lnum = line("'>")-1
-            endif
-        else
-            call append(line("'<")-1,'/*----------------  by '.s:author.' '.strftime("%Y-%m-%d").'  ---------------------')
-            call append(line("'>")  ,'------------------  by '.s:author.' '.strftime("%Y-%m-%d").'  -------------------*/')
-            let lnum = line(".")
-        endif
-    endif
-
-    call cursor(lnum,col)
-
-endfunction "}}}3
-
-function AddCurLineComment() "{{{3
-    let lnum = line(".")
-    let line = getline(lnum)
-    let tmp_line = line . ' // ' . g:atv_author . ' ' . strftime("%Y-%m-%d") . ' |'
-    call setline(lnum,tmp_line)
-    normal $
-endfunction "}}}3
-
-"}}}2
-
-"Input2Output definition 转换input/output{{{2
-
-function Input2Output() "{{{3
-    let lnum = line(".")
-    let line = getline(lnum)
-    if line =~ '^\s*\/\/' || line =~ '^\s*$'
-        return 0
-    endif
-
-    if line =~ '\<input\>\s\?'
-        let line = substitute(line,'\<input\>\s\?','output','')
-    elseif line =~ '\<output\>'
-        let line = substitute(line,'\<output\>','input ','')
-    endif
-
-    call setline(lnum,line)
-endfunction "}}}3
-
 "}}}2
 
 "}}}1
@@ -942,7 +319,7 @@ endfunction "}}}3
 "AutoArg 自动声明{{{3
 "--------------------------------------------------
 " Function: AutoArg
-" Input:
+" Input: 
 "   N/A
 " Description:
 "   auto argument for input/output/inout
@@ -1014,7 +391,7 @@ endfunction
 "AutoInst 自动例化{{{3
 "--------------------------------------------------
 " Function: AutoInst
-" Input:
+" Input: 
 "   mode : mode for autoinst
 " Description:
 "   autoinst for inst module
@@ -1031,14 +408,9 @@ endfunction
 "---------------------------------------------------
 function AutoInst(mode)
     try
-        "Get directory list by scaning line
-        let [dirlist,rec] = s:GetDirList()
 
-        "Get file-dir dictionary
-        let files = s:GetFileDirDicFromList(dirlist,rec)
-
-        "Get module-file dictionary
-        let modules = s:GetModuleFileDict(files)
+        "Get module-file-dir dictionary
+        let [files,modules] = s:GetModuleFileDirDic()
 
         "Record current position
         let orig_idx = line('.')
@@ -1068,7 +440,7 @@ function AutoInst(mode)
             "Get module_name & inst_name
             let [module_name,inst_name,idx1,idx2,idx3] = s:GetInstModuleName()
 
-            "Get keep inst io & update inst io list
+            "Get keep inst io & update inst io list 
             let keep_io_list = s:GetInstIO(getline(idx1,line('.')))
             let upd_io_list = s:GetInstIO(getline(line('.'),idx2))
             "Get changed inst io names
@@ -1080,12 +452,20 @@ function AutoInst(mode)
                 let dir = files[file]
                 "read file
                 let lines = readfile(dir.'/'.file)
+                if s:ati_add_dir_keep == 1
+                    for exp_dir in keys(s:ati_add_dirs)
+                        if dir =~ escape(exp_dir,'\/')
+                            let dir = substitute(dir,escape(exp_dir,'\/'),s:ati_add_dirs[exp_dir],'')
+                            break
+                        endif
+                    endfor
+                endif
                 let add_dir = dir.'/'.file
                 "io sequences
                 let io_seqs = s:GetIO(lines,'seq')
                 let io_names = s:GetIO(lines,'name')
             else
-                echohl ErrorMsg | echo "file: ".module_name.".v does not exist in cur dir ".getcwd() | echohl None
+                echohl ErrorMsg | echo "No file with module name ".module_name." exist in cur dir ".getcwd() | echohl None
                 return
             endif
 
@@ -1154,7 +534,7 @@ endfunction
 "AutoPara 自动参数{{{3
 "--------------------------------------------------
 " Function: AutoPara
-" Input:
+" Input: 
 "   mode : mode for autoinstparam
 " Description:
 "   autopara for inst module
@@ -1165,20 +545,14 @@ endfunction
 " Note:
 "   list of parameter sequences
 "    0     1         2               3                4                    5     6
-"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 "   para_seqs = {seq : value }
 "   para_names = {parameter_name : value }
 "---------------------------------------------------
 function AutoPara(mode)
     try
-        "Get directory list by scaning line
-        let [dirlist,rec] = s:GetDirList()
-
-        "Get file-dir dictionary
-        let files = s:GetFileDirDicFromList(dirlist,rec)
-
-        "Get module-file dictionary
-        let modules = s:GetModuleFileDict(files)
+        "Get module-file-dir dictionary
+        let [files,modules] = s:GetModuleFileDirDic()
 
         "Record current position
         let orig_idx = line('.')
@@ -1229,7 +603,7 @@ function AutoPara(mode)
             endif
 
             "Remove parameter from para_seqs that want to be keep when autoinstparam
-            "   value = [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+            "   value = [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
             "   para_seqs = {sequence : value }
             "   para_names = {parameter_name : value }
             for name in keep_para_list
@@ -1277,7 +651,7 @@ endfunction
 "AutoParaValue 自动参数Value{{{3
 "--------------------------------------------------
 " Function: AutoParaValue
-" Input:
+" Input: 
 "   mode : mode for autoinstparam
 " Description:
 "   auto para value for inst module
@@ -1288,20 +662,14 @@ endfunction
 " Note:
 "   list of parameter sequences
 "    0     1         2               3                4                    5     6
-"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 "   para_seqs = {seq : value }
 "   para_names = {parameter_name : value }
 "---------------------------------------------------
 function AutoParaValue(mode)
     try
-        "Get directory list by scaning line
-        let [dirlist,rec] = s:GetDirList()
-
-        "Get file-dir dictionary
-        let files = s:GetFileDirDicFromList(dirlist,rec)
-
-        "Get module-file dictionary
-        let modules = s:GetModuleFileDict(files)
+        "Get module-file-dir dictionary
+        let [files,modules] = s:GetModuleFileDirDic()
 
         "Record current position
         let orig_idx = line('.')
@@ -1392,7 +760,7 @@ endfunction
 "AutoReg 自动寄存器{{{3
 "--------------------------------------------------
 " Function: AutoReg
-" Input:
+" Input: 
 "   N/A
 " Description:
 "   autoreg all register
@@ -1462,7 +830,7 @@ endfunction
 "AutoWire 自动线网{{{3
 "--------------------------------------------------
 " Function: AutoWire
-" Input:
+" Input: 
 "   N/A
 " Description:
 "   autowire all wire
@@ -1505,7 +873,7 @@ function AutoWire()
                 endif
             endfor
 
-            "Kill all contents between //Start of automatic wire and //End of automatic wire
+            "Kill all contents between //Start of automatic wire and //End of automatic wire 
             "Current position must be at /*autowire*/ line
             call s:KillAutoWire()
 
@@ -1532,7 +900,7 @@ endfunction
 "AutoDef 自动定义所有信号{{{3
 "--------------------------------------------------
 " Function: AutoDef
-" Input:
+" Input: 
 "   N/A
 " Description:
 "   autodef all signals
@@ -1556,7 +924,7 @@ function AutoDef()
                 break
             endif
 
-            "Kill all contents between //Start of automatic define and //End of automatic define
+            "Kill all contents between //Start of automatic define and //End of automatic define 
             "Current position must be at /*autodef*/ line
             "call s:KillAutoDef()
 
@@ -1592,7 +960,7 @@ function AutoDef()
             "cursor to end
             call search('\/\/End of automatic wire','W')
             "}}}4
-
+    
             if search('\/\/End of automatic define','W')
             else
                 call append(line('.'),prefix.'//End of automatic define')
@@ -1628,30 +996,30 @@ endfunction
 "KillAutoArg 删除所有声明{{{3
 "--------------------------------------------------
 " Function: KillAutoArg
-" Input:
+" Input: 
 "   Must put cursor to /*autoarg*/ position
 " Description:
 " e.g kill all declaration after /*autoarg*/
-"
+"    
 "   module_name
-"   (
+"   (   
 "       /*autoarg*/
 "       //Input
 "       port_a,port_b,
 "       //Input
 "       port_c,port_d
 "   );
-"
+"   
 "   --------------> after KillAutoArg
 "
 "   module_name
-"   (
+"   (   
 "       /*autoarg*/);
 "
 " Output:
 "   line after kill
 "---------------------------------------------------
-function s:KillAutoArg()
+function s:KillAutoArg() 
     let orig_idx = line('.')
     let orig_col = col('.')
     let idx = line('.')
@@ -1696,7 +1064,7 @@ endfunction
 "DrawArg 按格式输出例化声明{{{3
 "--------------------------------------------------
 " Function: DrawArg
-" Input:
+" Input: 
 "   io_seqs : new inst io sequences for align
 "
 " Description:
@@ -1720,7 +1088,7 @@ function s:DrawArg(io_seqs)
     for seq in sort(s:Str2Num(keys(a:io_seqs)),s:sort_funcref)
         let value = a:io_seqs[seq]
         let type = value[0]
-        if type != 'keep'
+        if type != 'keep' 
             let name = value[5]
             "calculate maximum len of position to Draw
             "prefix.name.name2comma
@@ -1740,7 +1108,7 @@ function s:DrawArg(io_seqs)
             let value = a:io_seqs[seq]
             let type = value[0]
             let line = value[7]
-            if type != 'keep'
+            if type != 'keep' 
                 "Format IO sequences
                 "   [type, sequence, io_dir, width1, width2, signal_name, last_port, line ]
                 "name
@@ -1757,7 +1125,7 @@ function s:DrawArg(io_seqs)
                 "comma
                 let last_port = value[6]
                 if last_port == 1
-                    let comma = ' '         "space
+                    let comma = ' '      "space
                 else
                     let comma = ','      "comma exists
                 endif
@@ -1796,11 +1164,11 @@ function s:DrawArg(io_seqs)
         endif
         "}}}6
 
-        let lines[-1] = substitute(lines[-1],',\s*$','','')
+        let lines[-1] = substitute(lines[-1],',\s*$','','') 
 
     endif
     "}}}5
-
+    
     "input/output/inout classified{{{5
     if s:ata_io_clsf == 1
         "get inputs/outputs/inouts first{{{6
@@ -1812,7 +1180,7 @@ function s:DrawArg(io_seqs)
             let type = value[0]
             let line = value[7]
             let io_dir = value[2]
-            if type != 'keep'
+            if type != 'keep' 
                 "Format IO sequences
                 "   [type, sequence, io_dir, width1, width2, signal_name, last_port, line ]
                 "name
@@ -1827,12 +1195,7 @@ function s:DrawArg(io_seqs)
                 endif
 
                 "comma
-                let last_port = value[6]
-                if last_port == 1
-                    let comma = ' '         "space
-                else
-                    let comma = ','      "comma exists
-                endif
+                let comma = ','      "comma exists
 
                 "get line
                 let line = name.name2comma.comma
@@ -1909,7 +1272,7 @@ function s:DrawArg(io_seqs)
             endif
         endif
         "}}}6
-
+        
         "draw inout{{{6
         let cur_len = 0
         let wrap_line = prefix
@@ -1938,7 +1301,7 @@ function s:DrawArg(io_seqs)
         endif
         "}}}6
 
-        let lines[-1] = substitute(lines[-1],',\s*$','','')
+        let lines[-1] = substitute(lines[-1],',\s*$','','') 
     endif
     "}}}5
 
@@ -1960,7 +1323,7 @@ endfunction
 "GetIO 获取输入输出端口{{{3
 "--------------------------------------------------
 " Function: GetIO
-" Input:
+" Input: 
 "   lines : all lines to get IO port
 "   mode : different use of keys
 "          seq -> use seq as key
@@ -1969,7 +1332,7 @@ endfunction
 "   Get io port info from declaration
 "   e.g
 "   module_name #(
-"       parameter A = 16
+"       parameter A = 16 
 "       parameter B = 4'd11
 "       parameter C = 16'h55
 "   )
@@ -2047,9 +1410,9 @@ function s:GetIO(lines,mode)
                 let seq = seq + 1
             "}}}
             "}}}5
-
+            
             " input/output ports{{{5
-            elseif line =~ '^\s*'. s:VlogTypePorts || line =~ '^(\s*'.s:VlogTypePorts
+            elseif line =~ '^\s*'. s:VlogTypePorts || line =~ '^\s*(\s*'.s:VlogTypePorts || line =~ '^\s*,\s*'.s:VlogTypePorts
                 let wait_port = 0
                 "delete abnormal
                 if line =~ '\<signed\>\|\<unsigned\>'
@@ -2058,26 +1421,22 @@ function s:GetIO(lines,mode)
                     let line = substitute(line,'\/\/.*$','','')
                 endif
 
-                "type reg/wire/logic/bit
+                "type reg/wire
                 let type = 'none'
                 if line =~ '\<reg\>'
                     let type = 'reg'
                 elseif line =~ '\<wire\>'
                     let type = 'wire'
-                elseif line =~ '\<logic\>'
-                    let type = 'logic'
-                elseif line =~ '\<bit\>'
-                    let type = 'bit'
                 endif
 
                 "io direction input/output/inout
                 let io_dir = matchstr(line,s:VlogTypePorts)
 
                 "width
-                let width = matchstr(line,'\[.*\]')
+                let width = matchstr(line,'\[.*\]')                 
                 let width = substitute(width,'\s*','','g')          "delete redundant space
-                let width1 = matchstr(width,'\v\[\zs\S+\ze:.*\]')
-                let width2 = matchstr(width,'\v\[.*:\zs\S+\ze\]')
+                let width1 = matchstr(width,'\v\[\zs\S+\ze:.*\]')   
+                let width2 = matchstr(width,'\v\[.*:\zs\S+\ze\]')   
 
                 if width == ''
                     let width1 = 'c0'
@@ -2099,7 +1458,6 @@ function s:GetIO(lines,mode)
                 "name
                 let line = substitute(line,io_dir,'','')
                 let line = substitute(line,'\<reg\>\|\<wire\>','','')
-                let line = substitute(line,'\<logic\>\|\<bit\>','','')
                 let line = substitute(line,'\[.*\]','','')
                 let name = matchstr(line,'\w\+')
                 if name == ''
@@ -2115,10 +1473,13 @@ function s:GetIO(lines,mode)
 
             "break{{{5
             "abnormal break
-            if line =~ '^\s*\<always\>' || line =~ '^\s*\<assign\>' || line =~ '^\s*\<endmodule\>' || line =~ '\<autodef\>'
+            if line =~ '^\s*\<always\>' || line =~ '^\s*\<assign\>' || line =~ '^\s*\<endmodule\>'
+                if wait_port == 1
+                    echohl ErrorMsg | echo "Error when GetIO! No io port but always/assign/endmodule show up!"| echohl None
+                endif
                 break
             endif
-
+            
             "verilog-1995,input/output/inout may appear outside bracket
             if s:ati_95_support == 1
             "verilog-2001 or above
@@ -2205,7 +1566,7 @@ endfunction
 "GetInstIO 获取例化端口{{{3
 "--------------------------------------------------
 " Function: GetInstIO
-" Input:
+" Input: 
 "   lines : lines to get inst IO port
 " Description:
 "   Get inst io port info from lines
@@ -2266,7 +1627,7 @@ endfunction
 "GetChangedInstIO 获取修改过的例化端口{{{3
 "--------------------------------------------------
 " Function: GetChangedInstIO
-" Input:
+" Input: 
 "   lines : lines to get inst IO port
 " Description:
 "   Get changed inst io port info from lines
@@ -2322,7 +1683,7 @@ endfunction
 "GetInstModuleName 获取例化名和模块名{{{3
 "--------------------------------------------------
 " Function: GetInstModuleName
-" Input:
+" Input: 
 "   Must put cursor to /*autoinst*/ position
 " Description:
 " e.g
@@ -2378,7 +1739,7 @@ function s:GetInstModuleName()
             call substitute(line,'(','\=add(left_simicolon_list,submatch(0))','g')
 
             "find position of '('
-            "in case of problem like
+            "in case of problem like 
             "   Register #(.WIDTH(32), .INIT(EXC_Vector_Base_Reset)) PC (
             "must get all column number of '('
             let col_match = line
@@ -2439,7 +1800,7 @@ function s:GetInstModuleName()
             call search('\(\/\/.*\)\@<![^ \/]','bW')
             "parameter exists
             if getline('.')[col('.')-1] == ')'
-                if searchpair('(','',')','bW') > 0
+                if searchpair('(','',')','bW','getline(".")=~"^\\s*\/\/"') > 0
                     let index = line('.')
                     let col = col('.')
                 else
@@ -2481,31 +1842,31 @@ endfunction
 "KillAutoInst 删除所有输入输出端口例化{{{3
 "--------------------------------------------------
 " Function: KillAutoInst
-" Input:
+" Input: 
 "   Must put cursor to /*autoinst*/ position
 " Description:
 " e.g kill all declaration after /*autoinst*/
-"
+"    
 "   module_name
 "   inst_name
-"   (
+"   (   
 "       .clk        (clk),      //input
 "       /*autoinst*/
 "       .port_b     (port_b)    //output
 "   );
-"
+"   
 "   --------------> after KillAutoInst
 "
 "   module_name
 "   inst_name
-"   (
+"   (   
 "       .clk        (clk),      //input
 "       /*autoinst*/);
 "
 " Output:
 "   line after kill
 "---------------------------------------------------
-function s:KillAutoInst()
+function s:KillAutoInst() 
     let orig_idx = line('.')
     let orig_col = col('.')
     let idx = line('.')
@@ -2546,11 +1907,11 @@ function s:KillAutoInst()
 endfunction
 "}}}3
 
-"AutoInst-Draw
+"AutoInst-Draw 
 "DrawIO 按格式输出例化IO口{{{3
 "--------------------------------------------------
 " Function: DrawIO
-" Input:
+" Input: 
 "   io_seqs : new inst io sequences for align
 "   io_list : old inst io name list
 "   chg_io_names : old inst io names that has been changed
@@ -2582,11 +1943,11 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
     for seq in sort(s:Str2Num(keys(a:io_seqs)),s:sort_funcref)
         let value = a:io_seqs[seq]
         let type = value[0]
-        if type != 'keep'
+        if type != 'keep' 
             let name = value[5]
             "calculate maximum len of position to Draw
             if value[4] == 'c0'
-                if value[3] == 'c0'
+                if value[3] == 'c0' 
                     let width = ''
                 else
                     let width = '['.value[3].']'
@@ -2596,7 +1957,7 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
             else
                 let width = ''
             endif
-            "io that's changed will be keeped if config
+            "io that's changed will be keeped if config 
             let connect = name.width
             if s:ati_keep_chg == 1
                 if(has_key(chg_io_names,name))
@@ -2626,7 +1987,7 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
         let type = value[0]
         let line = value[7]
         "add single comment/ifdef line{{{5
-        if type == 'keep'
+        if type == 'keep' 
             if line =~ '^\s*\/\/'
                 if s:ati_incl_cmnt == 1
                     let line = prefix.substitute(line,'^\s*','','')
@@ -2654,7 +2015,7 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
             let name2bracket = repeat(' ',max_lbracket_len-len(prefix)-len(name)-len('.'))
             "width
             if value[4] == 'c0'
-                if value[3] == 'c0'
+                if value[3] == 'c0' 
                     let width = ''
                 else
                     let width = '['.value[3].']'
@@ -2665,14 +2026,14 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
                 let width = ''
             endif
 
-            "io that's changed will be keeped if config
+            "io that's changed will be keeped if config 
             let connect = name.width
             if s:ati_keep_chg == 1
                 if(has_key(chg_io_names,name))
                     let connect = chg_io_names[name]
                 endif
             endif
-
+            
             "width2bracket
             "don't align tail if config
             if s:ati_tail_not_align == 1
@@ -2691,6 +2052,14 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
             endif
             "io_dir
             let io_dir = value[2]
+            let io_dir_name_list = split(s:ati_io_dir_name)
+            if io_dir == 'input'
+                let io_dir = io_dir_name_list[0]
+            elseif io_dir == 'output'
+                let io_dir = io_dir_name_list[1]
+            elseif io_dir == 'inout'
+                let io_dir = io_dir_name_list[2]
+            endif
 
             "Draw IO by config
             "empty list, default
@@ -2708,7 +2077,7 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
                     let line = prefix.'.'.name.name2bracket.'('.connect.width2bracket.')'.comma
                 endif
                 "process //INST_NEW
-                let io_idx = index(io_list,name)
+                let io_idx = index(io_list,name) 
                 "name not exist in old io_list, add //INST_NEW
                 if io_idx == -1
                     if s:ati_inst_new == 1
@@ -2727,7 +2096,7 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
 
             "in case special case happen(last port has been put in keep_io_list, there exist no last_port)
             "same time last line is not an io type, must record last_port index here
-            let self_last_port_idx = index(lines,line)
+            let self_last_port_idx = index(lines,line) 
 
         endif
     "}}}5
@@ -2736,7 +2105,7 @@ function s:DrawIO(io_seqs,io_list,chg_io_names)
     "special case: last port has been put in keep_io_list, there exist no last_port
     if last_port_flag == 0
         "set last item as last_port
-        let lines[self_last_port_idx] = substitute(lines[self_last_port_idx],',',' ','')
+        let lines[self_last_port_idx] = substitute(lines[self_last_port_idx],',',' ','') 
     endif
 
     if io_list == []
@@ -2767,7 +2136,7 @@ endfunction
 "GetPara 获取参数列表{{{3
 "--------------------------------------------------
 " Function: GetPara
-" Input:
+" Input: 
 "   lines : all lines to get parameter
 "   mode : different use of keys
 "          seq -> use seq as key
@@ -2794,7 +2163,7 @@ endfunction
 "
 "   e.g parameter sequences
 "    0     1         2               3                4                    5     6
-"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 "   [port,1,'A', '16',0,'',0]
 "   [port,2,'B', '4'd11',0,'',0]
 "   [keep,3,'c0','c0',0,'    //comment line',0]
@@ -2805,12 +2174,12 @@ endfunction
 " Output:
 "   list of parameter sequences
 "    0     1         2               3                4                    5     6
-"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 "---------------------------------------------------
 function s:GetPara(lines,mode)
     let idx = 0
 
-    "wait for parameter
+    "wait for parameter 
     let wait_module = 1
     let wait_left_braket = 1
     let wait_port_para = 1
@@ -2833,13 +2202,13 @@ function s:GetPara(lines,mode)
         "delete comment line in the middle
         let line = substitute(line,'^\s*\([^s \& ^/]\)\+.*\zs\/\/.*','','')
 
-        "find module
+        "find module 
         if line =~ '^\s*module'
             let wait_module = 0
         endif
 
-        "until module,skip
-        if wait_module == 1
+        "until module,skip 
+        if wait_module == 1 
             continue
         endif
 
@@ -2848,8 +2217,8 @@ function s:GetPara(lines,mode)
             let wait_left_braket = 0
         endif
 
-        "record single comment/ifdef line in port parameter
-        if wait_left_braket == 0 && wait_right_braket == 1
+        "record single comment/ifdef line in port parameter 
+        if wait_left_braket == 0 && wait_right_braket == 1 
             if line =~ '^\s*\`\(if\|elsif\|else\|endif\)' || (line =~ '^\s*\/\/' && line !~ '^\s*\/\/\s*{{{')
                 "[type, idx, line]
                 let type = 'keep'
@@ -2860,13 +2229,13 @@ function s:GetPara(lines,mode)
         endif
         "}}}
 
-        "find port parameter
+        "find port parameter 
         if wait_left_braket == 0 && line =~ 'parameter'
             let wait_port_para = 0
         endif
 
         "record port parameter line
-        if wait_port_para == 0 && wait_right_braket == 1
+        if wait_port_para == 0 && wait_right_braket == 1 
             "[type, idx, line]
             let type = 'port'
             let value = [type,idx,line]
@@ -2874,20 +2243,20 @@ function s:GetPara(lines,mode)
         endif
 
         "find ), skip function like $clog2(BMAN)
-        if wait_port_para == 0
+        if wait_port_para == 0 
             if line =~ ')' && line !~ '\$\w\+(.*)'
                 let wait_right_braket = 0
                 continue
             endif
         "no #() parameter, skip
-        else
+        else        
             if wait_left_braket == 1 && line =~ 'parameter'
                 let wait_right_braket = 0
             endif
         endif
 
-        "record single comment/ifdef line in declaration parameter
-        if wait_right_braket == 0 && wait_decl_para == 1
+        "record single comment/ifdef line in declaration parameter 
+        if wait_right_braket == 0 && wait_decl_para == 1 
             if line =~ '^\s*\`\(if\|elsif\|else\|endif\)' || (line =~ '^\s*\/\/' && line !~ '^\s*\/\/\s*{{{')
                 "[type, idx, line]
                 let type = 'keep'
@@ -2897,13 +2266,13 @@ function s:GetPara(lines,mode)
             endif
         endif
         "}}}
-
-        "record normal parameter
+        
+        "record normal parameter 
         if wait_right_braket == 0 && line =~ 'parameter'
             let wait_decl_para = 0
         endif
 
-        "record normal parameter
+        "record normal parameter 
         if wait_decl_para == 0
             "[type, idx, line]
             let type = 'decl'
@@ -2924,20 +2293,20 @@ function s:GetPara(lines,mode)
     let last_decl_para_idx = 0
 
     "remove single comment line before first declaration parameter
-    "find last port parameter first
+    "find last port parameter first 
     for idx in sort(s:Str2Num(keys(line_idxs)),s:sort_funcref)
         let value = line_idxs[idx]
         let type = value[0]
         if type == 'port'
-            let last_port_para_idx = idx
+            let last_port_para_idx = idx 
         endif
     endfor
-    "find last decl parameter first
+    "find last decl parameter first 
     for idx in sort(s:Str2Num(keys(line_idxs)),s:sort_funcref)
         let value = line_idxs[idx]
         let type = value[0]
         if type == 'decl'
-            let last_decl_para_idx = idx
+            let last_decl_para_idx = idx 
         endif
     endfor
 
@@ -2961,9 +2330,9 @@ function s:GetPara(lines,mode)
     "---------------------------------------------------------------
     " Problem Here. Cannot be solved right now.
     " Description:
-    " cannot keep ifdef ... endif for declaration parameter since it's mixed with other line ifdef
-    " e.g
-    " module test #(
+    " cannot keep ifdef ... endif for declaration parameter since it's mixed with other line ifdef 
+    " e.g 
+    " module test #( 
     "   parameter A = 0,
     "   parameter B = 0,
     " )
@@ -2973,7 +2342,7 @@ function s:GetPara(lines,mode)
     "   output bbbb;
     "   `endif
     " );
-    "   `ifdef
+    "   `ifdef  
     "       parameter C = 0;
     "       parameter D = 0;
     "   `endif
@@ -3004,7 +2373,7 @@ function s:GetPara(lines,mode)
         "search for idx after last port parameter
         if idx > last_port_para_idx
             if type == 'keep'
-                if line =~ '^\s*\`if'
+                if line =~ '^\s*\`if' 
                     if idx < last_decl_para_idx
                         "keep ifdef
                     else
@@ -3030,7 +2399,7 @@ function s:GetPara(lines,mode)
                 if endif_exist == 1
                     "remove endif
                     call remove(line_idxs,idx)
-                elseif line =~ '^\s*\`endif'
+                elseif line =~ '^\s*\`endif' 
                     "keep endif
                     let endif_exist = 1
                 endif
@@ -3049,7 +2418,7 @@ function s:GetPara(lines,mode)
 
         if type == 'keep'
             let seq = seq + 1
-                    "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+                    "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
             let value = [type, seq     , 'c0',           'c0',            0,                   line, 0]
             call extend(para_seqs, {seq : value})
         elseif type == 'port'
@@ -3059,13 +2428,13 @@ function s:GetPara(lines,mode)
                 if port_para =~ '\w\+\s*=\s*\S\+\ze\s*'
                     call add(port_para_list,matchstr(port_para,'\w\+\s*=\s*\S\+\ze\s*'))
                 endif
-            endfor
+            endfor 
 
             for para in port_para_list
                 let seq = seq + 1
                 let p_name = matchstr(para,'\w\+\ze\s*=')
                 let p_value = matchstr(para,'=\s*\zs\S\+')
-                        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+                        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
                 let value = [type, seq     , p_name        , p_value         ,0,                   '',   0]
                 call extend(para_seqs, {seq : value})
             endfor
@@ -3078,7 +2447,7 @@ function s:GetPara(lines,mode)
                 let seq = seq + 1
                 let p_name = matchstr(para,'\w\+\ze\s*=')
                 let p_value = matchstr(para,'=\s*\zs\S\+')
-                        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+                        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
                 let value = [type, seq     , p_name        , p_value         ,0,                   '',   0]
                 call extend(para_seqs, {seq : value})
             endfor
@@ -3088,16 +2457,16 @@ function s:GetPara(lines,mode)
     "}}}4
 
     "find last_port{{{4
-
+    
     "get last_port_seq and last_decl_seq
     if len(keys(para_seqs)) > 0
-        "last parameter in port
+        "last parameter in port 
         let last_port_seq = 0
         for seq in sort(s:Str2Num(keys(para_seqs)),s:sort_funcref)
             let value = para_seqs[seq]
             let type = value[0]
             if type == 'port'
-                let last_port_seq = seq
+                let last_port_seq = seq 
             endif
         endfor
         "last parameter in declaration
@@ -3108,28 +2477,28 @@ function s:GetPara(lines,mode)
             if(type == 'decl')
                 let last_decl_seq = seq
             endif
-        endfor
+        endfor 
     else
         echohl ErrorMsg | echo "Error para_seqs when GetPara! para_seqs length = ".len(keys(para_seqs))| echohl None
         echohl ErrorMsg | echo "Possibly no parameter exist" | echohl None
     endif
 
-    "add last_port_parameter
+    "add last_port_parameter 
     if last_port_seq != 0
         let value = para_seqs[last_port_seq]
-        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
         let value[4] = 1
         call extend(para_seqs,{last_port_seq : value})
     endif
-    "add last_decl_parameter
+    "add last_decl_parameter 
     if last_decl_seq != 0
         let value = para_seqs[last_decl_seq]
-        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+        "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
         let value[6] = 1
         call extend(para_seqs,{last_decl_seq : value})
     endif
     "}}}4
-
+    
     "output by mode{{{4
     if a:mode == 'seq'
         return para_seqs
@@ -3152,7 +2521,7 @@ endfunction
 "GetInstPara 获取例化参数{{{3
 "--------------------------------------------------
 " Function: GetInstPara
-" Input:
+" Input: 
 "   lines : lines to get inst parameter
 " Description:
 "   Get inst parameter info from lines
@@ -3167,11 +2536,11 @@ endfunction
 "   );
 "
 "   e.g_2
-"   module_name
+"   module_name 
 "   #(
 "       .C_PARAMETER (C_PARAMETER), .D_PARAMETER (D_PARAMETER),
 "       .E_PARAMETER (E_PARAMETER)
-"
+"       
 "   )
 "   inst_name
 "   (......);
@@ -3204,7 +2573,7 @@ endfunction
 "GetChangedPara 获取修改过的参数{{{3
 "--------------------------------------------------
 " Function: GetChangedPara
-" Input:
+" Input: 
 "   lines : lines to get parameter
 " Description:
 "   Get changed parameter info from lines
@@ -3251,7 +2620,7 @@ endfunction
 "GetParaModuleName 获取参数位置和模块名{{{3
 "--------------------------------------------------
 " Function: GetParaModuleName
-" Input:
+" Input: 
 "   Must put cursor to /*autoinstparam*/ position
 " Description:
 " e.g
@@ -3312,7 +2681,7 @@ function s:GetParaModuleName()
 
             if wait_semicolon_pair == 1
                 "search for pair ()
-                if searchpair('(','',')') > 0
+                if searchpair('(','',')','','getline(".")=~"^\\s*\/\/"') > 0
                     let index = line('.')
                     let col = col('.')
                 else
@@ -3331,7 +2700,7 @@ function s:GetParaModuleName()
 
                 "find position of module_name
                 call cursor(index,col)
-                call searchpair('(','',')','bW')
+                call searchpair('(','',')','bW','getline(".")=~"^\\s*\/\/"')
                 call search('\w\+','b')
 
                 "get module_name
@@ -3372,11 +2741,11 @@ endfunction
 "KillAutoPara 删除所有参数例化"{{{3
 "--------------------------------------------------
 " Function: KillAutoPara
-" Input:
+" Input: 
 "   inst_name
 " Description:
 " e.g kill all declaration after /*autoinstparam*/
-"
+"    
 "   module_name #(
 "       /*autoinstparam*/
 "       .A      (16             ),
@@ -3385,7 +2754,7 @@ endfunction
 "       .D      (10_0000        ),
 "       .E      ('HEAD'         )
 "   )inst_name
-"
+"   
 "   module_name #(
 "       /*autoinstparam*/
 "       .A      (16             ),
@@ -3404,12 +2773,12 @@ endfunction
 "   line after kill
 "   kill untill inst_name
 "---------------------------------------------------
-function s:KillAutoPara(inst_name)
+function s:KillAutoPara(inst_name) 
     let orig_idx = line('.')
     let orig_col = col('.')
     let idx = line('.')
     let line = getline(idx)
-    if line =~ '/\*\<autoinstparam\>' || line =~ '/\*\<autoinstparam_value\>'
+    if line =~ '/\*\<autoinstparam\>' || line =~ '/\*\<autoinstparam_value\>' 
         "if current line end with ')', one line
         if line =~')\s*$'
             return
@@ -3443,14 +2812,14 @@ function s:KillAutoPara(inst_name)
     endif
     "cursor back
     call cursor(orig_idx,orig_col)
-endfunction
+endfunction 
 "}}}3
 
 "AutoPara-Draw
 "DrawPara 按格式输出例化parameter-parameter{{{3
 "--------------------------------------------------
 " Function: DrawPara
-" Input:
+" Input: 
 "   para_seqs : new inst para sequences for align
 "   para_list : old inst para name list
 "   chg_para_names : old parameter names that has been changed
@@ -3458,7 +2827,7 @@ endfunction
 " Description:
 " e.g draw parameter sequences as format of para-para
 "    0     1         2               3                4                    5     6
-"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 "   [port,1,'A', '16',0,'',0]
 "   [port,2,'B', '4'd11',0,'',0]
 "   [keep,3,'c0','c0',0,'    //comment line',0]
@@ -3499,7 +2868,7 @@ function s:DrawPara(para_seqs,para_list,chg_para_names)
         let value = a:para_seqs[seq]
         let p_name = value[2]
         let p_value = p_name
-        "para that's changed will be keeped if config
+        "para that's changed will be keeped if config 
         if s:atp_keep_chg == 1
             if(has_key(chg_para_names,p_name))
                 let p_value = chg_para_names[p_name]
@@ -3527,7 +2896,7 @@ function s:DrawPara(para_seqs,para_list,chg_para_names)
         let type = value[0]
         let line = value[5]
         "add single comment/ifdef line {{{5
-        if type == 'keep'
+        if type == 'keep' 
             if line =~ '^\s*\/\/'
                 if s:atp_incl_cmnt == 1
                     let line = prefix.substitute(line,'^\s*','','')
@@ -3548,14 +2917,14 @@ function s:DrawPara(para_seqs,para_list,chg_para_names)
         else
             "Format parameter sequences
             "    0     1         2               3                4                    5     6
-            "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+            "   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 
             "p_name
             let p_name = value[2]
             "p_value
             let p_value = p_name
 
-            "para that's changed will be keeped if config
+            "para that's changed will be keeped if config 
             if s:atp_keep_chg == 1
                 if(has_key(chg_para_names,p_name))
                     let p_value = chg_para_names[p_name]
@@ -3599,7 +2968,7 @@ function s:DrawPara(para_seqs,para_list,chg_para_names)
                 else
                     let line = prefix.'.'.p_name.name2bracket.'('.p_value.value2bracket.')'.comma
                     "process //INST_NEW
-                    let para_idx = index(para_list,p_name)
+                    let para_idx = index(para_list,p_name) 
                     "name not exist in old para_list, add //INST_NEW
                     if para_idx == -1
                         if s:atp_para_new == 1
@@ -3618,7 +2987,7 @@ function s:DrawPara(para_seqs,para_list,chg_para_names)
 
                 "in case special case happen(last parameter has been put in keep_io_list, there exist no last_para)
                 "same time last line is not a parameter type, must record last_para index here
-                let self_last_para_idx = index(lines,line)
+                let self_last_para_idx = index(lines,line) 
 
             endif
         endif
@@ -3628,7 +2997,7 @@ function s:DrawPara(para_seqs,para_list,chg_para_names)
     "special case: last parameter has been put in keep_para_list, there exist no last_para
     if last_para_flag == 0
         "set last item as last_para
-        let lines[self_last_para_idx] = substitute(lines[self_last_para_idx],',',' ','')
+        let lines[self_last_para_idx] = substitute(lines[self_last_para_idx],',',' ','') 
     endif
 
     if para_list == []
@@ -3655,14 +3024,14 @@ endfunction
 "DrawParaValue 按格式输出例化parameter-value{{{3
 "--------------------------------------------------
 " Function: DrawParaValue
-" Input:
+" Input: 
 "   para_seqs : new inst para sequences for align
 "   para_list : old inst para name list
 "
 " Description:
 " e.g draw parameter sequences as format of para-value
 "    0     1         2               3                4                    5     6
-"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter]
+"   [type, sequence, parameter_name, parameter_value, last_port_parameter, line, last_decl_parameter] 
 "   [port,1,'A', '16',0,'',0]
 "   [port,2,'B', '4'd11',0,'',0]
 "   [keep,3,'c0','c0',0,'    //comment line',0]
@@ -3721,13 +3090,13 @@ function s:DrawParaValue(para_seqs,para_list)
         let value = a:para_seqs[seq]
         let type = value[0]
         "ignore single comment/ifdef line{{{5
-        if type == 'keep'
+        if type == 'keep' 
         "}}}5
         "add parameter line{{{5
         else
             "Format parameter sequences
             "    0     1         2               3                4               5
-            "   [type, sequence, parameter_name, parameter_value, last_parameter, line]
+            "   [type, sequence, parameter_name, parameter_value, last_parameter, line] 
 
             "p_name
             let p_name = value[2]
@@ -3772,7 +3141,7 @@ function s:DrawParaValue(para_seqs,para_list)
                 else
                     let line = prefix.'.'.p_name.name2bracket.'('.p_value.value2bracket.')'.comma
                     "process //INST_NEW
-                    let para_idx = index(para_list,p_name)
+                    let para_idx = index(para_list,p_name) 
                     "name not exist in old para_list, add //INST_NEW
                     if para_idx == -1
                         if s:atp_para_new == 1
@@ -3791,7 +3160,7 @@ function s:DrawParaValue(para_seqs,para_list)
 
                 "in case special case happen(last parameter has been put in keep_io_list, there exist no last_para)
                 "same time last line is not a parameter type, must record last_para index here
-                let self_last_para_idx = index(lines,line)
+                let self_last_para_idx = index(lines,line) 
 
             endif
         endif
@@ -3801,7 +3170,7 @@ function s:DrawParaValue(para_seqs,para_list)
     "special case: last parameter has been put in keep_para_list, there exist no last_para
     if last_para_flag == 0
         "set last item as last_para
-        let lines[self_last_para_idx] = substitute(lines[self_last_para_idx],',',' ','')
+        let lines[self_last_para_idx] = substitute(lines[self_last_para_idx],',',' ','') 
     endif
 
     if para_list == []
@@ -3832,7 +3201,7 @@ endfunction
 "GetReg 获取reg{{{3
 "--------------------------------------------------
 " Function: GetReg
-" Input:
+" Input: 
 "   lines : all lines to get reg
 " Description:
 "   Get reg info from declaration and always block
@@ -3889,12 +3258,12 @@ endfunction
 "GetfReg 获取非阻塞类型reg{{{3
 "--------------------------------------------------
 " Function: GetfReg
-" Input:
+" Input: 
 "   lines : all lines to get freg
 " Description:
 "   Get freg info from always block
 " Output:
-"   width_names
+"   width_names    
 "    0     1            2      3               4            5                6             7
 "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 "---------------------------------------------------
@@ -3925,8 +3294,8 @@ function s:GetfReg(lines)
                 let line = substitute(line,'\/\/.*$','','')
                 "meet another always block, assign statement, wire/reg or instance, break
                 if line =~ '^\s*'.s:VlogTypeCalcs || line =~ '^\s*'.s:VlogTypeDatas
-\               || line =~ '/\*\<autoinst\>\*/' || line =~ '\s*\.\w\+(.*)'
-\               || idx_inblock == len(a:lines) || line =~ '^\s*\<endmodule\>'
+\               || line =~ '/\*\<autoinst\>\*/' || line =~ '\s*\.\w\+(.*)' 
+\               || idx_inblock == len(a:lines) || line =~ '^\s*\<endmodule\>' 
                     break
                 else
                     "match a <= ...; or {a,b[1:0],c} <= ...;
@@ -3951,11 +3320,11 @@ function s:GetfReg(lines)
                         "get name first
                         let reg_name_list = s:GetSigName(left)
 
-                        "width_names
+                        "width_names    
                         "    0     1            2      3               4            5                6             7
                         "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 
-                        "sigle signal, find its signal width
+                        "sigle signal, find its signal width 
                         if len(reg_name_list) == 1
                             let seq = seq + 1
                             let reg_name = reg_name_list[0]
@@ -4021,8 +3390,8 @@ function s:GetcReg(lines)
                 let line = substitute(line,'\/\/.*$','','')
                 "meet another always block, assign statement, wire/reg or instance, break
                 if line =~ '^\s*'.s:VlogTypeCalcs || line =~ '^\s*'.s:VlogTypeDatas
-\               || line =~ '/\*\<autoinst\>\*/' || line =~ '\s*\.\w\+(.*)'
-\               || idx_inblock == len(a:lines) || line =~ '^\s*\<endmodule\>'
+\               || line =~ '/\*\<autoinst\>\*/' || line =~ '\s*\.\w\+(.*)' 
+\               || idx_inblock == len(a:lines) || line =~ '^\s*\<endmodule\>' 
                     break
                 else
                     "match a <= ...; or {a,b[1:0],c} <= ...;
@@ -4046,11 +3415,11 @@ function s:GetcReg(lines)
                         "get name first
                         let reg_name_list = s:GetSigName(left)
 
-                        "width_names
+                        "width_names    
                         "    0     1            2      3               4            5                6             7
                         "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 
-                        "sigle signal, find its signal width
+                        "sigle signal, find its signal width 
                         if len(reg_name_list) == 1
                             let seq = seq + 1
                             let reg_name = reg_name_list[0]
@@ -4083,7 +3452,7 @@ endfunction
 "GetDeclReg 获取已经声明的reg{{{3
 "--------------------------------------------------
 " Function: GetDeclReg
-" Input:
+" Input: 
 "   N/A
 " Description:
 "   lines : lines to get declared register
@@ -4166,7 +3535,7 @@ function s:GetDeclReg(lines)
         let idx = idx + 1
     endwhile
 
-    return [decl_reg,auto_reg]
+    return [decl_reg,auto_reg] 
 endfunction
 "}}}3
 
@@ -4174,7 +3543,7 @@ endfunction
 "KillAutoReg 删除所有自动寄存器声明"{{{3
 "--------------------------------------------------
 " Function: KillAutoReg
-" Input:
+" Input: 
 "   Must put cursor to /*autoreg*/ position
 " Description:
 " e.g kill all declaration after /*autoreg*/
@@ -4195,7 +3564,7 @@ endfunction
 "   line after kill
 "   kill all between //Start of automatic reg & //End of automatic reg
 "---------------------------------------------------
-function s:KillAutoReg()
+function s:KillAutoReg() 
     let orig_idx = line('.')
     let orig_col = col('.')
     let idx = line('.')
@@ -4227,11 +3596,11 @@ function s:KillAutoReg()
                 endif
             else
                 let idx = idx + 1
-                "never start, normal end
+                "never start, normal end 
                 if line =~ 'endmodule' || idx == line('$')
                     break
                 endif
-            endif
+            endif 
         endwhile
     else
         echohl ErrorMsg | echo "Error running KillAutoReg! Kill line not match /*autoreg*/ !"| echohl None
@@ -4239,14 +3608,14 @@ function s:KillAutoReg()
 
     "cursor back
     call cursor(orig_idx,orig_col)
-endfunction
+endfunction 
 "}}}3
 
 "AutoReg-Draw
 "DrawReg 按格式输出例化register{{{3
 "--------------------------------------------------
 " Function: DrawReg
-" Input:
+" Input: 
 "   reg_names : new reg names for align
 "   reg_list : old reg name list
 "
@@ -4359,7 +3728,7 @@ function s:DrawReg(reg_names,reg_list)
         else
             let line = prefix.'reg'.'  '.width.width2name.name.name2semicol.semicol
             "process //REG_NEW
-            let reg_idx = index(reg_list,name)
+            let reg_idx = index(reg_list,name) 
             "name not exist in old reg_list, add //REG_NEW
             if reg_idx == -1
                 if s:atr_reg_new == 1
@@ -4396,7 +3765,7 @@ function s:DrawReg(reg_names,reg_list)
     for seq in sort(s:Str2Num(keys(creg_seqs)),s:sort_funcref)
         let value = creg_seqs[seq]
         "Format reg sequences
-        "    0       1         2       3       4            5
+        "    0       1         2       3       4            5 
         "   [type, sequence, width1, width2, signal_name, lines]
 
         "width
@@ -4427,7 +3796,7 @@ function s:DrawReg(reg_names,reg_list)
         else
             let line = prefix.'reg'.'  '.width.width2name.name.name2semicol.semicol
             "process //REG_NEW
-            let reg_idx = index(reg_list,name)
+            let reg_idx = index(reg_list,name) 
             "name not exist in old reg_list, add //REG_NEW
             if reg_idx == -1
                 if s:atr_reg_new == 1
@@ -4489,7 +3858,7 @@ endfunction
 "GetWire 获取wire{{{3
 "--------------------------------------------------
 " Function: GetWire
-" Input:
+" Input: 
 "   lines : all lines to get wire
 " Description:
 "   Get wire info from instantce and assign block
@@ -4513,7 +3882,7 @@ endfunction
 "
 " Output:
 "   list of wire sequences
-"    0       1         2       3       4            5
+"    0       1         2       3       4            5 
 "   [type, sequence, width1, width2, signal_name, lines]
 "---------------------------------------------------
 function s:GetWire(lines)
@@ -4526,12 +3895,12 @@ endfunction
 "GetaWire 获取assign类型wire{{{3
 "--------------------------------------------------
 " Function: GetaWire
-" Input:
+" Input: 
 "   lines : all lines to assign wire
 " Description:
 "   Get awire info from assign block
 " Output:
-"   width_names
+"   width_names    
 "    0     1            2      3               4            5                6             7
 "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 "---------------------------------------------------
@@ -4574,8 +3943,8 @@ function s:GetaWire(lines)
                     break
                 "meet another always block, assign statement, wire/reg or instance, break
                 elseif line =~ '^\s*'.s:VlogTypeCalcs || line =~ '^\s*'.s:VlogTypeDatas
-\               || line =~ '/\*\<autoinst\>\*/' || line =~ '\s*\.\w\+(.*)'
-\               || idx_inblock == len(a:lines) || line =~ '^\s*\<endmodule\>'
+\               || line =~ '/\*\<autoinst\>\*/' || line =~ '\s*\.\w\+(.*)' 
+\               || idx_inblock == len(a:lines) || line =~ '^\s*\<endmodule\>' 
                     break
                 else
                     let multi_line = multi_line.line
@@ -4598,11 +3967,11 @@ function s:GetaWire(lines)
                 "get name first
                 let reg_name_list = s:GetSigName(left)
 
-                "width_names
+                "width_names    
                 "    0     1            2      3               4            5                6             7
                 "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 
-                "sigle signal, find its signal width
+                "sigle signal, find its signal width 
                 if len(reg_name_list) == 1
                     let seq = seq + 1
                     let reg_name = reg_name_list[0]
@@ -4632,7 +4001,7 @@ endfunction
 "GetiWire 获取inst类型wire{{{3
 "--------------------------------------------------
 " Function: GetiWire
-" Input:
+" Input: 
 "   lines : lines to get inst io wire
 " Description:
 "   Get inst io wire info from lines
@@ -4653,7 +4022,7 @@ endfunction
 "   );
 "
 " Output:
-"   width_names
+"   width_names    
 "    0     1            2      3             4            5
 "   [seqs, signal_name, lines, module_names, conn_widths, resolved]
 "---------------------------------------------------
@@ -4673,7 +4042,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
     let orig_col = col('.')
     "Progressbar
     if s:atv_pb_en == 1
-        let pb = NewSimpleProgressBar("Getting inst wire :",len(lines))
+        let pb = NewSimpleProgressBar("Getting inst wire :",len(lines)) 
     endif
     while idx < len(lines)
         let idx = idx + 1
@@ -4714,13 +4083,13 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
             endtry
         endif
         "}}}4
-
+        
         "Get inst wire{{{4
         "
         "  .port_a  (   connection_b[10:0]  )
         "    |              |          |
         "   port           conn       conn_width
-        "
+        "  
         "  port_width can be found in the instance file's io declaration
         "
         "in case abnormal get module_name, idx2 must be bigger than idx
@@ -4752,7 +4121,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
                     "used for multi inst in the same line e.g. .wire_a(wire_a), .wire_b(wire_b)
                     let line = substitute(line,'\.\s*\w\+\s*([^.]*)','','')
 
-                    "only find wire,omit useless pattern
+                    "only find wire,omit useless pattern 
                     "e.g.   .wire_a(1'b1) .wire_b() .wire_c(0)
                     if (substitute(conn,'\w\+\s*\(\[.*\]\)\?\s*','','') != '') || (substitute(conn,'\s*','','') == '') || (substitute(conn,'\s*\d\+\s*','','') == '')
                         continue
@@ -4782,7 +4151,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
                     if has_key(inst_io_names,port)
                         "    0     1         2       3       4       5            6          7
                         "   [type, sequence, io_dir, width1, width2, signal_name, last_port, line ]
-                        let value = inst_io_names[port]
+                        let value = inst_io_names[port] 
                         let io_dir = value[2]
                         if io_dir != 'input'
                             let wire_status = 1
@@ -4800,7 +4169,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
                     endif
 
                     "if it's io, it can't be used to declare wire
-                    if has_key(module_io_names,conn_name)
+                    if has_key(module_io_names,conn_name) 
                         let wire_status = 4
                     endif
 
@@ -4811,7 +4180,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
                             let conn_width = conn_width
                         else
                             "if connection width not exist, use port_width
-                            if conn_width == ''
+                            if conn_width == '' 
                                 if value[3] == 'c0' || value[4] == 'c0'
                                     let port_width = ''
                                 else
@@ -4850,7 +4219,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
                                 "    0     1            2           3             4            5
                                 "   [seqs, signal_name, lines,      module_names, conn_widths, resolved]
                         let value = [seqs, conn_name,   inst_lines, module_names, conn_widths, resolved]
-
+                        
                         call extend(width_names,{conn_name : value})
                         "echo 'name = '.conn_name.join(conn_widths)
                         "if wire_status != -1
@@ -4868,7 +4237,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
             let idx = idx2
         endif
         "}}}4
-
+        
     endwhile
     "Put cursor back to original position
     call cursor(orig_idx,orig_col)
@@ -4885,7 +4254,7 @@ endfunction
 "GetiWire_DelPara 删除inst parameter避免阻碍获取inst类型wire{{{3
 "--------------------------------------------------
 " Function: GetiWire_DelPara
-" Input:
+" Input: 
 "   lines : lines to delete
 " Description:
 "   Delete only inst parameter lines
@@ -4897,11 +4266,11 @@ endfunction
 "   inst_name
 "   ( ...  );
 "
-"   after deleteion:
+"   after deleteion: 
 "
 "   module_name #(
-"
-"
+"       
+"       
 "   )
 "   inst_name
 "   ( ...  );
@@ -4930,12 +4299,12 @@ function s:GetiWire_DelPara(lines)
             let flag_lbracket = 0
         endif
         "find #(
-        if flag_num == 1
+        if flag_num == 1 
             let multi_line = multi_line.line
             "still find
-            if multi_line =~ '#\s*$'
+            if multi_line =~ '#\s*$' 
             "find line
-            elseif multi_line =~ '#\s*('
+            elseif multi_line =~ '#\s*(' 
                 let flag_lbracket = 1
             "abonormal end
             else
@@ -4943,7 +4312,7 @@ function s:GetiWire_DelPara(lines)
             endif
         endif
         "find inst parameter
-        if flag_num == 1 && flag_lbracket == 1 && flag_rbracket == 0
+        if flag_num == 1 && flag_lbracket == 1 && flag_rbracket == 0 
             while line =~ '\.\s*\w\+\s*([^.]*)'
                 "when match, first delete multiple inner bracket
                 "e.g. .ADDR_CFG_LAST ( 32*(ROOT_CHN_NUM) )
@@ -4957,7 +4326,7 @@ function s:GetiWire_DelPara(lines)
             endwhile
         endif
         "end
-        if flag_num == 1 && flag_lbracket == 1 && line =~ ')'
+        if flag_num == 1 && flag_lbracket == 1 && line =~ ')' 
             let flag_rbracket = 1
             let flag_lbracket = 0
             let flag_num = 0
@@ -4971,7 +4340,7 @@ endfunction
 "GetDeclWire 获取已经声明的wire{{{3
 "--------------------------------------------------
 " Function: GetDeclWire
-" Input:
+" Input: 
 "   N/A
 " Description:
 "   lines : lines to get declared wire
@@ -5054,7 +4423,7 @@ function s:GetDeclWire(lines)
         let idx = idx + 1
     endwhile
 
-    return [decl_wire,auto_wire]
+    return [decl_wire,auto_wire] 
 endfunction
 "}}}3
 
@@ -5062,7 +4431,7 @@ endfunction
 "KillAutoWire 删除所有自动线网声明"{{{3
 "--------------------------------------------------
 " Function: KillAutoWire
-" Input:
+" Input: 
 "   Must put cursor to /*autowire*/ position
 " Description:
 " e.g kill all declaration after /*autowire*/
@@ -5083,7 +4452,7 @@ endfunction
 "   line after kill
 "   kill all between //Start of automatic wire & //End of automatic wire
 "---------------------------------------------------
-function s:KillAutoWire()
+function s:KillAutoWire() 
     let orig_idx = line('.')
     let orig_col = col('.')
     let idx = line('.')
@@ -5115,11 +4484,11 @@ function s:KillAutoWire()
                 endif
             else
                 let idx = idx + 1
-                "never start, normal end
+                "never start, normal end 
                 if line =~ 'endmodule' || idx == line('$')
                     break
                 endif
-            endif
+            endif 
         endwhile
     else
         echohl ErrorMsg | echo "Error running KillAutoWire! Kill line not match /*autowire*/ !"| echohl None
@@ -5127,14 +4496,14 @@ function s:KillAutoWire()
 
     "cursor back
     call cursor(orig_idx,orig_col)
-endfunction
+endfunction 
 "}}}3
 
 "AutoWire-Draw
 "DrawWire 按格式输出例化wire{{{3
 "--------------------------------------------------
 " Function: DrawWire
-" Input:
+" Input: 
 "   wire_names : new wire names for align
 "   wire_list : old wire name list
 "
@@ -5247,7 +4616,7 @@ function s:DrawWire(wire_names,wire_list)
         else
             let line = prefix.'wire'.' '.width.width2name.name.name2semicol.semicol
             "process //WIRE_NEW
-            let wire_idx = index(wire_list,name)
+            let wire_idx = index(wire_list,name) 
             "name not exist in old wire_list, add //WIRE_NEW
             if wire_idx == -1
                 if s:atw_wire_new == 1
@@ -5284,7 +4653,7 @@ function s:DrawWire(wire_names,wire_list)
     for seq in sort(s:Str2Num(keys(iwire_seqs)),s:sort_funcref)
         let value = iwire_seqs[seq]
         "Format wire sequences
-        "    0       1         2       3       4            5
+        "    0       1         2       3       4            5 
         "   [type, sequence, width1, width2, signal_name, lines]
 
         "width
@@ -5315,7 +4684,7 @@ function s:DrawWire(wire_names,wire_list)
         else
             let line = prefix.'wire'.' '.width.width2name.name.name2semicol.semicol
             "process //WIRE_NEW
-            let wire_idx = index(wire_list,name)
+            let wire_idx = index(wire_list,name) 
             "name not exist in old wire_list, add //WIRE_NEW
             if wire_idx == -1
                 if s:atw_wire_new == 1
@@ -5377,7 +4746,7 @@ endfunction
 "KillAutoDef 删除所有自动线网声明"{{{3
 "--------------------------------------------------
 " Function: KillAutoDef
-" Input:
+" Input: 
 "   Must put cursor to /*autodef*/ position
 " Description:
 " e.g kill all declaration after /*autodef*/
@@ -5394,7 +4763,7 @@ endfunction
 "   line after kill
 "   kill all between //Start of automatic define & //End of automatic define
 "---------------------------------------------------
-function s:KillAutoDef()
+function s:KillAutoDef() 
     let orig_idx = line('.')
     let orig_col = col('.')
     let idx = line('.')
@@ -5426,11 +4795,11 @@ function s:KillAutoDef()
                 endif
             else
                 let idx = idx + 1
-                "never start, normal end
+                "never start, normal end 
                 if line =~ 'endmodule' || idx == line('$')
                     break
                 endif
-            endif
+            endif 
         endwhile
     else
         echohl ErrorMsg | echo "Error running KillAutoDef! Kill line not match /*autodef*/ !"| echohl None
@@ -5438,18 +4807,18 @@ function s:KillAutoDef()
 
     "cursor back
     call cursor(orig_idx,orig_col)
-endfunction
+endfunction 
 "}}}3
 
-"AutoDef-Move
+"AutoDef-Move 
 "DefMove 移动所有自动线网声明"{{{3
 "--------------------------------------------------
 " Function: DefMove
-" Input:
-"
+" Input: 
+"   
 " Description:
 "   Move all declaration outside
-"   //Start of automatic define
+"   //Start of automatic define 
 "   &
 "   //End of automatic define
 "   to the position below
@@ -5478,7 +4847,7 @@ endfunction
 " Output:
 "   line after move
 "---------------------------------------------------
-function s:DefMove()
+function s:DefMove() 
     let lines = getline(1,line('$'))
     let [keep_reg_list,upd_reg_list] = s:GetDeclReg(lines)
     let [keep_wire_list,upd_wire_list] = s:GetDeclWire(lines)
@@ -5534,179 +4903,182 @@ endfunction
 "Only for test use!!!!!!!!!!
 function TestAutoVerilog() "{{{3
 
-    let lines = getline(1,line('$'))
-    let [sig_names,io_names,reg_width_names,awire_width_names,iwire_width_names] = s:GetAllSig(lines,'all')
+"    let lines = getline(1,line('$'))
+"    let [sig_names,io_names,reg_width_names,awire_width_names,iwire_width_names] = s:GetAllSig(lines,'all')
+"
+"    "test wire use {{{4
+"
+"    let lines = getline(1,line('$'))
+"
+"    "gather all signals together
+"
+"    let io_names = s:GetIO(lines,'name')
+"    
+"    let reg_names = reg_width_names
+"
+"    "test reg {{{5
+"    let cnt0 = 0
+"    for name in keys(reg_names)
+"        let cnt0 += 1
+"    endfor
+"    "echo cnt0
+"
+"    let cnt1 = 0
+"    for line in lines
+"        if line =~ '^\s*reg\s.*;\s*.*$'
+"            let name = matchstr(line,'^\s*reg\s*\(\[.*\]\)\?\s*\zs\w\+\ze\s*;\s*.*$')
+"            let cnt1 += 1
+"            "echo name
+"            if has_key(reg_names,name)
+"                call remove(reg_names,name)
+"            else
+"                "call append(line('$'),name)
+"            endif
+"        endif
+"    endfor
+"    "echo cnt1
+"
+"    let err_flag = 0
+"    let err_regs = []
+"    if cnt0 != cnt1
+"        for reg in keys (reg_names)
+"            let err_flag = 1
+"            call add(err_regs,reg)
+"        endfor
+"        if err_flag == 1
+"            echo 'err!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+"            echo cnt0
+"            echo cnt1
+"            call append(line('$'),'reg remain-----')
+"            call append(line('$'),err_regs)
+"        else
+"            echo 'reg match right!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+"        endif
+"    else
+"        echo 'reg match right!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+"    endif
+"    "}}}5
+"    
+"    "test wire {{{5
+"    
+"    "io wire
+"    let iowire_names = {}
+"    for name in keys(io_names)
+"        "   [type, sequence, io_dir, width1, width2, signal_name, last_port, line ]
+"        let value = io_names[name]
+"        let type = value[0]
+"        if type == 'wire' || type == 'none'
+"            call extend(iowire_names, {name : value})
+"        endif
+"    endfor
+"
+"    "iwire and awire
+"    let awire_width_names = copy(awire_width_names)
+"    let iwire_width_names = copy(iwire_width_names)
+"    let orig_awire_width_names = copy(awire_width_names)
+"    let orig_iwire_width_names = copy(iwire_width_names)
+"
+"    "iwire{{{6
+"    let cnt_iwire = 0
+"    for wire in keys(iwire_width_names)
+"        let cnt_iwire += 1
+"    endfor
+"
+"    let cnt_assign_iwire = 0
+"    let cnt_assign_wire = 0
+"    for wire in keys (awire_width_names)
+"        let cnt_assign_wire += 1
+"        if has_key(iwire_width_names,wire)
+"            let cnt_assign_iwire += 1
+"            call remove(iwire_width_names,wire)
+"            continue
+"        endif
+"    endfor
+"
+"    "declared wire in iwire
+"    let cnt_decl_iwire = 0
+"    let decl_wire = {}
+"    for line in lines
+"        if line =~ '^\s*wire.*;\s*.*$'
+"            "let name = matchstr(line,'^\s*wire\s*\(\[.*\]\)\?\s*\zs\w\+\ze.*;\s*\(\/\/.*\)\?\s*$')
+"            while line =~ '^\s*wire\s\+\(\[.\{-\}\]\)\?\s*.\{-\}\s*;\s*'
+"                "delete abnormal
+"                if line =~ '\<signed\>\|\<unsigned\>'
+"                    let line = substitute(line,'\<signed\>\|\<unsigned\>','','')
+"                elseif line =~ '\/\/.*$'
+"                    let line = substitute(line,'\/\/.*$','','')
+"                endif
+"                let names = matchstr(line,'^\s*wire\s\+\(\[.\{-\}\]\)\?\s*\zs.\{-\}\ze\s*;\s*')
+"                "in case style of wire a = {b,c,d};
+"                let names = substitute(names,'\(\/\/\)\@<!=.*$','','')
+"                "in case style of wire [1:0] a,b,c;
+"                for name in split(names,',')
+"                    let name = matchstr(name,'\w\+')
+"                    call extend(decl_wire,{name : ""})
+"                    if has_key(iwire_width_names,name)
+"                        let cnt_decl_iwire += 1
+"                        call remove(iwire_width_names,name)
+"                    endif
+"                endfor
+"                let line = substitute(line,'^\s*wire\s\+\(\[.\{-\}\]\)\?\s*.\{-\}\s*;\s*','','')
+"            endwhile
+"        endif
+"    endfor
+"
+"    if len(iwire_width_names) == 0
+"        echo 'iwire match right!!!!!!!!!!!!!!!!!!!!!'
+"    else
+"        echo 'iwire not all match'
+"        call append(line('$'),'iwire remain-----')
+"        for name in keys ( iwire_width_names )
+"            call append(line('$'),name)
+"        endfor
+"    endif
+"    "}}}6
+"    
+"    "all wire {{{6
+"    let all_wire_names = {}
+"    let awire_width_names = orig_awire_width_names
+"    let iwire_width_names = orig_iwire_width_names
+"
+"    for wire in keys(iwire_width_names)
+"        call extend(all_wire_names,{wire : ""})
+"    endfor
+"
+"    for wire in keys(awire_width_names)
+"        call extend(all_wire_names,{wire : ""})
+"    endfor
+"
+"    for wire in keys(iowire_names)
+"        call extend(all_wire_names,{wire : ""})
+"    endfor
+"
+"    for name in keys(decl_wire)
+"        if has_key(all_wire_names,name)
+"            call remove(decl_wire,name)
+"        endif
+"    endfor
+"
+"    if len(decl_wire) == 0
+"        echo 'decl wire match right!!!!!!!!!!!!!!!!!!!!!'
+"    else
+"        echo 'decl wire not all match'
+"        call append(line('$'),'decl wire remain-----')
+"        for name in keys ( decl_wire)
+"            call append(line('$'),name)
+"        endfor
+"    endif
+"    "}}}6
+"    
+"    "}}}5
+"
+"   "}}}4
+"
+"    call AutoWire()
 
-    "test wire use {{{4
-
-    let lines = getline(1,line('$'))
-
-    "gather all signals together
-
-    let io_names = s:GetIO(lines,'name')
-
-    let reg_names = reg_width_names
-
-    "test reg {{{5
-    let cnt0 = 0
-    for name in keys(reg_names)
-        let cnt0 += 1
-    endfor
-    "echo cnt0
-
-    let cnt1 = 0
-    for line in lines
-        if line =~ '^\s*reg\s.*;\s*.*$'
-            let name = matchstr(line,'^\s*reg\s*\(\[.*\]\)\?\s*\zs\w\+\ze\s*;\s*.*$')
-            let cnt1 += 1
-            "echo name
-            if has_key(reg_names,name)
-                call remove(reg_names,name)
-            else
-                "call append(line('$'),name)
-            endif
-        endif
-    endfor
-    "echo cnt1
-
-    let err_flag = 0
-    let err_regs = []
-    if cnt0 != cnt1
-        for reg in keys (reg_names)
-            let err_flag = 1
-            call add(err_regs,reg)
-        endfor
-        if err_flag == 1
-            echo 'err!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-            echo cnt0
-            echo cnt1
-            call append(line('$'),'reg remain-----')
-            call append(line('$'),err_regs)
-        else
-            echo 'reg match right!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-        endif
-    else
-        echo 'reg match right!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-    endif
-    "}}}5
-
-    "test wire {{{5
-
-    "io wire
-    let iowire_names = {}
-    for name in keys(io_names)
-        "   [type, sequence, io_dir, width1, width2, signal_name, last_port, line ]
-        let value = io_names[name]
-        let type = value[0]
-        if type == 'wire' || type == 'none'
-            call extend(iowire_names, {name : value})
-        endif
-    endfor
-
-    "iwire and awire
-    let awire_width_names = copy(awire_width_names)
-    let iwire_width_names = copy(iwire_width_names)
-    let orig_awire_width_names = copy(awire_width_names)
-    let orig_iwire_width_names = copy(iwire_width_names)
-
-    "iwire{{{6
-    let cnt_iwire = 0
-    for wire in keys(iwire_width_names)
-        let cnt_iwire += 1
-    endfor
-
-    let cnt_assign_iwire = 0
-    let cnt_assign_wire = 0
-    for wire in keys (awire_width_names)
-        let cnt_assign_wire += 1
-        if has_key(iwire_width_names,wire)
-            let cnt_assign_iwire += 1
-            call remove(iwire_width_names,wire)
-            continue
-        endif
-    endfor
-
-    "declared wire in iwire
-    let cnt_decl_iwire = 0
-    let decl_wire = {}
-    for line in lines
-        if line =~ '^\s*wire.*;\s*.*$'
-            "let name = matchstr(line,'^\s*wire\s*\(\[.*\]\)\?\s*\zs\w\+\ze.*;\s*\(\/\/.*\)\?\s*$')
-            while line =~ '^\s*wire\s\+\(\[.\{-\}\]\)\?\s*.\{-\}\s*;\s*'
-                "delete abnormal
-                if line =~ '\<signed\>\|\<unsigned\>'
-                    let line = substitute(line,'\<signed\>\|\<unsigned\>','','')
-                elseif line =~ '\/\/.*$'
-                    let line = substitute(line,'\/\/.*$','','')
-                endif
-                let names = matchstr(line,'^\s*wire\s\+\(\[.\{-\}\]\)\?\s*\zs.\{-\}\ze\s*;\s*')
-                "in case style of wire a = {b,c,d};
-                let names = substitute(names,'\(\/\/\)\@<!=.*$','','')
-                "in case style of wire [1:0] a,b,c;
-                for name in split(names,',')
-                    let name = matchstr(name,'\w\+')
-                    call extend(decl_wire,{name : ""})
-                    if has_key(iwire_width_names,name)
-                        let cnt_decl_iwire += 1
-                        call remove(iwire_width_names,name)
-                    endif
-                endfor
-                let line = substitute(line,'^\s*wire\s\+\(\[.\{-\}\]\)\?\s*.\{-\}\s*;\s*','','')
-            endwhile
-        endif
-    endfor
-
-    if len(iwire_width_names) == 0
-        echo 'iwire match right!!!!!!!!!!!!!!!!!!!!!'
-    else
-        echo 'iwire not all match'
-        call append(line('$'),'iwire remain-----')
-        for name in keys ( iwire_width_names )
-            call append(line('$'),name)
-        endfor
-    endif
-    "}}}6
-
-    "all wire {{{6
-    let all_wire_names = {}
-    let awire_width_names = orig_awire_width_names
-    let iwire_width_names = orig_iwire_width_names
-
-    for wire in keys(iwire_width_names)
-        call extend(all_wire_names,{wire : ""})
-    endfor
-
-    for wire in keys(awire_width_names)
-        call extend(all_wire_names,{wire : ""})
-    endfor
-
-    for wire in keys(iowire_names)
-        call extend(all_wire_names,{wire : ""})
-    endfor
-
-    for name in keys(decl_wire)
-        if has_key(all_wire_names,name)
-            call remove(decl_wire,name)
-        endif
-    endfor
-
-    if len(decl_wire) == 0
-        echo 'decl wire match right!!!!!!!!!!!!!!!!!!!!!'
-    else
-        echo 'decl wire not all match'
-        call append(line('$'),'decl wire remain-----')
-        for name in keys ( decl_wire)
-            call append(line('$'),name)
-        endfor
-    endif
-    "}}}6
-
-    "}}}5
-
-   "}}}4
-
-    call AutoWire()
-
+     let file = s:GetFileList()
+     "let file = s:GetTags()
+    
 endfunction "}}}3
 
 "-------------------------------------------------------------------
@@ -5716,7 +5088,7 @@ endfunction "}}}3
 "{{{3 GetSigName 获取信号名称
 "--------------------------------------------------
 " Function: GetSigName
-" Input:
+" Input: 
 "   str : input string
 " Description:
 " e.g1
@@ -5737,7 +5109,7 @@ endfunction "}}}3
 function s:GetSigName(str)
     let name_list = []
     if a:str =~ '{.*}'
-        let str = matchstr(a:str,'{\zs.*\ze}')
+        let str = matchstr(a:str,'{\zs.*\ze}') 
         let str = substitute(str,'\s*','','g')        "delete redundant space
         let str_list = split(str,',')
         for str in str_list
@@ -5751,7 +5123,7 @@ function s:GetSigName(str)
 endfunction
 "}}}3
 
-"Universal-GetLeftWidth
+"Universal-GetLeftWidth 
 "GetLeftWidth 获取左半部分信号宽度{{{3
 "--------------------------------------------------
 " Function: GetLeftWidth
@@ -5759,7 +5131,7 @@ endfunction
 "   left : left side of the sentence
 "   seq : sequences of the signal
 "   line : orginal line
-"   width_names = {signal_name : value}
+"   width_names = {signal_name : value} 
 " Description:
 " e.g1
 "   signal_a[3:0]
@@ -5777,7 +5149,7 @@ endfunction
 "
 " Output:
 "   list of signal widths
-"   value =
+"   value = 
 "    0     1            2      3               4            5                6             7
 "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 "---------------------------------------------------
@@ -5809,11 +5181,11 @@ function s:GetLeftWidth(left,seq,name,line,width_names)
     "get width
     "left have width
     if a:left =~ '\[.*\]'
-        let width = matchstr(a:left,'\[.*\]')
+        let width = matchstr(a:left,'\[.*\]')                 
         let width = substitute(width,'\s*','','g')          "delete redundant space
         "left have two width e.g. signal_t[2:0] signal_a[WIDTH-1:0]
         if width =~ '[.*:.*]'
-            let width1 = matchstr(width,'\v\[\zs\S+\ze:.*\]')
+            let width1 = matchstr(width,'\v\[\zs\S+\ze:.*\]')   
             let width2 = matchstr(width,'\v\[.*:\zs\S+\ze\]')
             "pure number width e.g. signal_a[3:0]
             if substitute(width1,'\d\+','','g') == '' && substitute(width2,'\d\+','','g') == ''
@@ -5837,7 +5209,7 @@ function s:GetLeftWidth(left,seq,name,line,width_names)
     else
 
     endif
-
+    
 
     "pair up width_names
             "    0     1            2      3               4
@@ -5857,9 +5229,9 @@ endfunction
 " Function: GetRightWidth
 " Input:
 "   right : right side of the sentence
-"   width_names = {signal_name : value}
+"   width_names = {signal_name : value} 
 " Description:
-" e.g1
+" e.g1                                  
 "   16'hffff;                           --------> right_width_nrs
 "   `WIDTH'hffff;                       --------> right_widths
 " e.g2
@@ -5870,13 +5242,13 @@ endfunction
 "   signal_a[2*3-1:0];signal_b[4/2-1:0];--------> right_widths
 " e.g5
 "   signal_a[5:0];                      --------> right_width_nrs
-" e.g6
+" e.g6                                  
 "   signal_a; or ~signal_a; or !signal_a; --------> right_signal_link
-" e.g7
+" e.g7                                  
 "   {signal_a,signal_b,signal_c[2:0]};    --------> right_signal_link
-" e.g8
+" e.g8                                  
 "   signal_a&signal_b&signal_c[2:0];      --------> right_signal_link
-" e.g9
+" e.g9                                  
 "   en ? signal_b : signal_c[2:0];        --------> right_signal_link
 "
 "   right_width_nrs : record width list that's pure number
@@ -5885,7 +5257,7 @@ endfunction
 "
 " Output:
 "   list of signal widths
-"   value =
+"   value = 
 "    0     1            2      3               4            5                6             7
 "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 "---------------------------------------------------
@@ -5910,7 +5282,7 @@ function s:GetRightWidth(right,name,width_names)
     if right =~ '^\(`\?\w\+\|\d\+\)' . "'" . '[bhd].*;' && substitute(right,'^\(`\?\w\+\|\d\+\)'."'".'[bhd]\w*','','')==';'
         "pure number width e.g. 5'd0 -> signal_a[4:0]
         if right =~ '^\d\+' . "'" . '[bhd].*'
-            let width = matchstr(right,'\d\+')
+            let width = matchstr(right,'\d\+')   
             call add(right_width_nrs,str2nr(width)-1)
             call add(right_width_nrs,0)
         "parameter type input width e.g. WIDTH'hff -> signal_a[WIDTH-1:0]
@@ -5923,7 +5295,7 @@ function s:GetRightWidth(right,name,width_names)
     "match signal[N], N may be `define or parameter or number
     "Note: only match once, don't match pattern like a[7]+b[17] && a[7:0]
     elseif right =~ '^\~\?\w\+\[[^:]*\];' && substitute(right,'^\~\?\w\+\[[^:]\{-}\]','','') == ';'
-        let width1 = matchstr(right,'\v\[\zs.*\ze\]')
+        let width1 = matchstr(right,'\v\[\zs.*\ze\]')   
         let width2 = ''
         "pure number width e.g. signal_a[4]
         if substitute(width1,'\d\+','','g') == ''
@@ -5932,11 +5304,11 @@ function s:GetRightWidth(right,name,width_names)
         else
             call add(right_widths,[width1,width2])
         endif
-
+        
     "match signal[M:N] or ~signal[M:N], M and N may be `define or parameter or number
     "Note: only match once, don't match pattern like a[7:0]+b[7:0]
-    elseif right =~ '^\~\?\w\+\[.\{-}:.\{-}\];' && substitute(right,'^\~\?\w\+\[.\{-}:.\{-}\]','','') == ';'
-            let width1 = matchstr(right,'\v\[\zs.{-}\ze:.{-}\]')
+    elseif right =~ '^\~\?\w\+\[.\{-}:.\{-}\];' && substitute(right,'^\~\?\w\+\[.\{-}:.\{-}\]','','') == ';' 
+            let width1 = matchstr(right,'\v\[\zs.{-}\ze:.{-}\]')   
             let width2 = matchstr(right,'\v\[.{-}:\zs.{-}\ze\]')
             "pure number width e.g. signal_a[3:0]
             if substitute(width1,'\d\+','','g') == '' && substitute(width2,'\d\+','','g') == ''
@@ -5949,7 +5321,7 @@ function s:GetRightWidth(right,name,width_names)
             endif
 
     "match signal0 == signa11 or signal0 != signal1
-    elseif right =~ '^(\?\w\+\(\[.*\]\)\?==\w\+\(\[.*\]\)\?)\?;' || right =~ '^(\?\w\+\(\[.*\]\)\?!=\w\+\(\[.*\]\)\?)\?;'
+    elseif right =~ '^(\?\w\+\(\[.*\]\)\?==\w\+\(\[.*\]\)\?)\?;' || right =~ '^(\?\w\+\(\[.*\]\)\?!=\w\+\(\[.*\]\)\?)\?;' 
         call add(right_width_nrs,0)
 
     "match &signal0 |signal0 or ^signal0
@@ -6072,7 +5444,7 @@ endfunction
 "" Input:
 ""   type : signal type
 ""   list of signal widths
-""   value =
+""   value = 
 ""    0     1            2      3               4            5                6             7
 ""   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
 ""   mode : different use of keys
@@ -6088,14 +5460,14 @@ endfunction
 ""   right_signal_link : record right-width that's link to a signal or a few signals
 "" Output:
 ""   list of signal sequences
-""    0     1         2       3       4            5
+""    0     1         2       3       4            5 
 ""   [type, sequence, width1, width2, signal_name, lines]
 ""---------------------------------------------------
 "function s:GetSig(type,width_names,mode)
 "
 "    let sig_names = {}
 "
-"    "left_width_nrs & left_widths & right_width_nrs & right_widths
+"    "left_width_nrs & left_widths & right_width_nrs & right_widths 
 "    "process and add width1 & width2
 "    for name in keys(a:width_names)
 "
@@ -6112,10 +5484,10 @@ endfunction
 "        "e.g.
 "        "parameter type input width e.g. reg_a[WIDTH-1:0]
 "        "calculation type e.g. reg_a[2*3-1:0] reg_b[4/2-1:0]
-"        "2. only exist width that is a number type, use maximum & minimum number as width.
-"        "e.g.
+"        "2. only exist width that is a number type, use maximum & minimum number as width. 
+"        "e.g. 
 "        "reg_t[2:1] reg_t[0] -> width1 = 2, width2 = 0
-"
+"        
 "        "first judge left width
 "        if left_widths != []
 "            let [width1,width2] = left_widths[0]
@@ -6193,7 +5565,7 @@ endfunction
 "    else
 "        echohl ErrorMsg | echo "Error mode input for function GetSig! mode = ".a:mode| echohl None
 "    endif
-"
+"    
 "endfunction
 ""}}}3
 
@@ -6204,9 +5576,9 @@ endfunction
 "   lines : all lines to get IO port
 "   mode : mode for signals getting
 "          reg  -> mode for GetReg
-"          wire -> mode for GetWire
+"          wire -> mode for GetWire 
 "           -> ......
-"
+"           
 " Description:
 "   +------+--------------------+
 "   | type | specify type       |
@@ -6254,11 +5626,11 @@ function s:GetAllSig(lines,mode)
 
     "reg{{{4
     let reg_names = {}
-    "   list of width_names
+    "   list of width_names    
     "    0     1            2      3               4            5                6             7
     "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
-    let freg_width_names = s:GetfReg(a:lines)
-    let creg_width_names = s:GetcReg(a:lines)
+    let freg_width_names = s:GetfReg(a:lines) 
+    let creg_width_names = s:GetcReg(a:lines) 
     let reg_width_names = copy(freg_width_names)
     call extend(reg_width_names,creg_width_names,"error")
 
@@ -6363,11 +5735,11 @@ function s:GetAllSig(lines,mode)
     endif
 
     "awire{{{4
-    "   list of width_names
+    "   list of width_names    
     "    0     1            2      3               4            5                6             7
     "   [seqs, signal_name, lines, left_width_nrs, left_widths, right_width_nrs, right_widths, right_signal_link]
     let wire_names = {}
-    let awire_width_names = s:GetaWire(a:lines)
+    let awire_width_names = s:GetaWire(a:lines) 
     "remove awire exists in io
     if s:atw_remove_io == 1
         for name in keys(awire_width_names)
@@ -6446,12 +5818,9 @@ function s:GetAllSig(lines,mode)
     "   list of width_names
     "    0     1            2           3             4            5
     "   [seqs, signal_name, lines,      module_names, conn_widths, resolved]
-    "Get directory list by scaning line
-    let [dirlist,rec] = s:GetDirList()
-    "Get file-dir dictionary
-    let files = s:GetFileDirDicFromList(dirlist,rec)
-    "Get module-file dictionary
-    let modules = s:GetModuleFileDict(files)
+    "Get module-file-dir dictionary
+    let [files,modules] = s:GetModuleFileDirDic()
+
     "Get iwire
     "remove io, declared register and register from them
     let iwire_width_names = s:GetiWire(a:lines,files,modules,reg_width_names,decl_reg,io_names)
@@ -6471,7 +5840,7 @@ function s:GetAllSig(lines,mode)
 "        endif
 "    endfor
 "    "}}}4
-
+  
 "    "print iwire test {{{4
 "    for name in keys(iwire_width_names)
 "        let value = iwire_width_names[name]
@@ -6492,7 +5861,7 @@ function s:GetAllSig(lines,mode)
         "iwire and awire duplicate
         if has_key(wire_names,name)
             let awire_value = wire_names[name]
-            let awire_resolved = awire_value[4]
+            let awire_resolved = awire_value[4] 
 
             if awire_value[1] != 'awire'
                 echohl ErrorMsg | echo "Error signal in inst wire but not an assign wire."| echohl None
@@ -6547,11 +5916,10 @@ function s:GetAllSig(lines,mode)
 "        let type = value[1]
 "        let width = value[2]
 "        let resolved = value[4]
-"        echo "type==". sig_type . repeat(" ", 8-strlen(sig_type)) .
+"        echo "type==". sig_type . repeat(" ", 8-strlen(sig_type)) . 
 "                    \" name==" . name . repeat(" ",32-strlen(name)).
 "                    \" dtype==" . type . repeat(" ",8-strlen(type)).
 "                    \" width==" . width . repeat(" ",16-strlen(width)).
-"                    \" resolved==" . resolved . repeat(" ",8-strlen(resolved))
 "    endfor
 "
 "    for name in keys(reg_sigs)
@@ -6560,7 +5928,7 @@ function s:GetAllSig(lines,mode)
 "        let type = value[1]
 "        let width = value[2]
 "        let resolved = value[4]
-"        echo "type==". sig_type . repeat(" ", 8-strlen(sig_type)) .
+"        echo "type==". sig_type . repeat(" ", 8-strlen(sig_type)) . 
 "                    \" name==" . name . repeat(" ",32-strlen(name)).
 "                    \" dtype==" . type . repeat(" ",8-strlen(type)).
 "                    \" width==" . width . repeat(" ",16-strlen(width)).
@@ -6573,14 +5941,14 @@ function s:GetAllSig(lines,mode)
 "        let type = value[1]
 "        let width = value[2]
 "        let resolved = value[4]
-"        echo "type==". sig_type . repeat(" ", 8-strlen(sig_type)) .
+"        echo "type==". sig_type . repeat(" ", 8-strlen(sig_type)) . 
 "                    \" name==" . name . repeat(" ",32-strlen(name)).
 "                    \" dtype==" . type . repeat(" ",8-strlen(type)).
 "                    \" width==" . width . repeat(" ",16-strlen(width)).
 "                    \" resolved==" . resolved . repeat(" ",8-strlen(resolved))
 "    endfor
 "    "}}}4
-
+    
     if a:mode == 'wire'
         return wire_names
     endif
@@ -6590,45 +5958,590 @@ function s:GetAllSig(lines,mode)
 endfunction
 "}}}3
 
-"Others
-"{{{3 GetDirList 获取需要例化的文件夹名以及是否递归
+"Universal-GetModules 获取模块-文件名-文件夹位置的关系
+
+"{{{3 GetModuleFileDirDic 获取模块-文件名-文件夹位置的关系
 "--------------------------------------------------
-" Function: GetDirList
-" Input:
-"   Lines look like:
+" Function: GetModuleFileDirDic
+" Input: 
+"   1.mode 
+"     0 : normal,automatic get 
+"     1 : filelist 
+"     2 : tags
+" Description:
+"   Get module-file-dir dictionary
+" e.g
+"   files  : file-dir dictionary(.v file)
+"          e.g  ALU.v -> ./hdl/core
+"   modules: module-file dictionary
+"          e.g  ALU -> ALU.v
+" Output:
+"   [files,modules]
+"---------------------------------------------------
+function s:GetModuleFileDirDic()
+    "by tags
+    if s:atv_cd_mode == 2
+        "Get module-file-dir dictionary from tags
+        let file = s:GetTags()
+        let [files,modules] = s:GetModuleFileDirDicFromTags(file)
+    else
+        "by normal
+        if s:atv_cd_mode == 0
+            "Get directory list by scaning line
+            let [dirlist,rec,vlist,elist,flist,tlist] = s:GetVerilogLib()
+            "Get file-dir dictionary from library
+            let files = s:GetFileDirDicFromLib(dirlist,rec,vlist,elist)
+        "by file list
+        elseif s:atv_cd_mode == 1
+            "Get file-dir dictionary from filelist
+            let file = s:GetFileList()
+            let files = s:GetFileDirDicFromFlist(file)
+        else
+            echohl ErrorMsg | echo "Error mode input for GetModuleFileDirDic"| echohl None
+        endif
+        "Get module-file dictionary
+        let modules = s:GetModuleFileDict(files)
+    endif
+    return [files,modules]
+endfunction
+"}}}3
+
+"{{{3 GetVerilogLib 获取verilog文件搜索位置
+"--------------------------------------------------
+" Function: GetVerilogLib
+" Input: 
+"   Lines look like: 
 "   verilog-library-directories:()
 "   verilog-library-directories-recursive:0
+"   verilog-library-flags:()
 " Description:
 " e.g
-"   verilog-library-directories:("test" ".")
-"   verilog-library-directories-recursive:1
+"   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"   | Style                                                                  | Function                     |
+"   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"   | verilog-library-directories:("test" ".")                               | add the directory test & .   |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-directories-recursive:1                                | directory search recursive   |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-files:("/some/path/technology.v" "/some/path/tech2.v") | add the two files            |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("-y dir -y dir2")                               | add the directory dir & dir2 |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("+incdir+dir3")                                 | add the directory dir3       |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("-Idir4")                                       | add the directory dir4       |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("+libext+.v .sv")                               | add the extension .v         |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("-v filename")                                  | add file of filename         |
+"   +------------------------------------------------------------------------+------------------------------+
+"   |                                                                        |                              |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("-f filename")                                  | add filelist of filename     |
+"   +------------------------------------------------------------------------+------------------------------+
+"   | verilog-library-flags:("-t filename")                                  | add tag of filename          |
+"   +------------------------------------------------------------------------+------------------------------+
+"
 " Output:
-"   dirlist and recursive flag
-"   e.g.
-"       dirlist = ['test','.']
+"   Parameter for verilog library
+" e.g.
+"   1.name:dir 
+"     dirlist and recursive flag
+"       dirlist = ['test','.','dir','dir2','dir3','dir4']
 "       rec = 1
+"   2.name:file
+"     vlist
+"       vlist = ['/some/path/technology.v','/some/path/tech2.v']
+"   3.name:ext
+"     extension for file
+"       elist = ['.v','.sv']
+"   4.name:flist
+"     filelist to get verilog file
+"       flist = ['../filelist/ctags_filelist.f']
+"   5.name:tlist
+"     taglist to get verilog file
+"       tlist = ['../filelist/tags']
 "---------------------------------------------------
-function s:GetDirList()
-    let dirlist = []
+function s:GetVerilogLib()
+    "dir
+    let dirlist = [] 
     let rec = 1
+    let s:ati_add_dirs = {} "s:ati_add_dirs -> {F:/vim -> $VIM}
+    "verilog file
+    let vlist = [] 
+    "extension
+    let elist = []
+    "filelist
+    let flist = []
+    "tag list
+    let tlist = []
+    "divide quotation
+    let quote_list = []
+
+    "Get library
     let lines = getline(1,line('$'))
     for line in lines
-        "find directories
+        "verilog-library-directories
         if line =~ 'verilog-library-directories:(.*)'
             let dir = matchstr(line,'verilog-library-directories:(\zs.*\ze)')
             call substitute(dir,'"\zs\S*\ze"','\=add(dirlist,submatch(0))','g')
         endif
-        "find recursive
+
+        "verilog-library-directories-recursive
         if line =~ 'verilog-library-directories-recursive:'
             let rec = matchstr(line,'verilog-library-directories-recursive:\s*\zs\d\ze\s*$')
             if rec != '0' && rec != '1'
                 echohl ErrorMsg | echo "Error input for verilog-library-directories-recursive = ".rec| echohl None
             endif
         endif
+
+        "verilog-library-files
+        if line =~ 'verilog-library-files:(.*)'
+            "//verilog-library-files:("./test.v" "./aaa/test1.v")
+            let file = matchstr(line,'verilog-library-files:(\zs.*\ze)')
+            let quote_list = []
+            call substitute(file,'"\zs.\{-}\ze"','\=add(quote_list,submatch(0))','g')
+            for lib in quote_list
+                call substitute(lib,'\zs\S\+\ze','\=add(vlist,submatch(0))','g')
+            endfor
+        endif
+        
+        "verilog-library-flags
+        if line =~ 'verilog-library-flags:(.*)'
+            let quote = matchstr(line,'verilog-library-flags:("\zs.*\ze")')
+            let matchflags = '\('.   '-y'           . '\|' .
+                                    \'+incdir+'     . '\|' .
+                                    \'-I'           . '\|' .
+                                    \'-v'           . '\|' .
+                                    \'+libext+'     . '\|' .
+                                    \'-f'           . '\|' .
+                                    \'-t'           . '\)'
+            let flag_list = split(quote,matchflags.'\(\s*[^ \-+]\+\)\{1,\}\zs')
+            for flag in flag_list
+                if flag =~ '^\s*-y'
+                    let ydir = substitute(flag,'-y','','g')
+                    call substitute(ydir,'\zs\S\+\ze','\=add(dirlist,submatch(0))','g')
+                elseif flag =~ '^\s*+incdir+'
+                    let incdir = substitute(flag,'+incdir+','','g')
+                    call substitute(incdir,'\zs\S\+\ze','\=add(dirlist,submatch(0))','g')
+                elseif flag =~ '^\s*-I'
+                    let idir = substitute(flag,'-I','','g')
+                    call substitute(idir,'\zs\S\+\ze','\=add(dirlist,submatch(0))','g')
+                elseif flag =~ '^\s*-v'
+                    let vfile = substitute(flag,'-v','','g')
+                    call substitute(vfile,'\zs\S\+\ze','\=add(vlist,submatch(0))','g')
+                elseif flag =~ '^\s*+libext+'
+                    let ext = substitute(flag,'+libext+','','g')
+                    call substitute(ext,'\zs\S\+\ze','\=add(elist,submatch(0))','g')
+                elseif flag =~ '^\s*-f'
+                    let file = substitute(flag,'-f','','g')
+                    call substitute(file,'\zs\S\+\ze','\=add(flist,submatch(0))','g')
+                elseif flag =~ '^\s*-t'
+                    let file = substitute(flag,'-t','','g')
+                    call substitute(file,'\zs\S\+\ze','\=add(tlist,submatch(0))','g')
+                endif
+            endfor
+        endif
     endfor
+
+    "filter duplicate
+    if exists('*uniq')
+        call uniq(dirlist)
+        call uniq(vlist)
+        call uniq(elist)
+        call uniq(flist)
+        call uniq(tlist)
+    endif
+
+    "expand directories{{{4
     "default
-    let dir = '.'
-    if dirlist == []
+    let dir = '.'       
+    if dirlist == [] 
+        let dirlist = [dir]
+    endif
+
+    let exp_dirlist = []
+    for dir in dirlist
+        "expand directories in SYSTEM VARIABLE (e.g. $VIM -> F:/Vim)
+        let dir = expand(dir)
+        "expand directories to full path(e.g. ./ -> /usr/share/vim/vim74 )
+        let dir = substitute(fnamemodify(dir,':p'),'\/$','','')
+        call add(exp_dirlist,dir)
+    endfor
+    "record expand dir dictionary as ati_add_dirs
+    for idx in range(len(dirlist))
+        call extend(s:ati_add_dirs,{exp_dirlist[idx]:dirlist[idx]})
+    endfor
+    let dirlist = exp_dirlist
+    "}}}4
+
+    "expand verilog list{{{4
+    let exp_vlist = []
+    for file in vlist
+        let file = expand(file)
+        let file = fnamemodify(file,':p')
+        call add(exp_vlist,file)
+    endfor
+    let vlist = exp_vlist
+    "}}}4
+    
+    "expand filelist{{{4
+    let exp_flist = []
+    for file in flist
+        let file = expand(file)
+        let file = fnamemodify(file,':p')
+        call add(exp_flist,file)
+    endfor
+    let flist = exp_flist
+    "}}}4
+
+    "expand taglist{{{4
+    let exp_tlist = []
+    for file in tlist
+        let file = expand(file)
+        let file = fnamemodify(file,':p')
+        call add(exp_tlist,file)
+    endfor
+    let tlist = exp_tlist
+    "}}}4
+    
+    return [dirlist,str2nr(rec),vlist,elist,flist,tlist]
+
+endfunction
+"}}}3
+
+"{{{3 GetFileList 获取filelist
+"--------------------------------------------------
+" Function: GetFileList
+" Input: 
+"   1.browse 
+"     browse filelist file
+"   2.
+"     global variable s:atv_cd_flist_file
+"   3.
+"     Lines look like: 
+"     verilog-library-flags:("-f filename")
+"   4.
+"     ./filelist.f ./file_list.f or other .f file
+" Description:
+" e.g
+"   verilog-library-filelist:(./filelist.f)
+" Output:
+"   filelist
+"   e.g. ./filelist.f
+"---------------------------------------------------
+let s:atv_cd_flist_browse_file = ''
+let s:atv_cd_flist_selected_file = ''
+function s:GetFileList()
+    let file = ''
+    if s:atv_cd_flist_browse == 1 
+        if s:atv_cd_flist_browse_file == ''
+            if has("browse")
+                let file = browse(0,'Select Your Filelist','./','')
+                if file !~ '.f$'
+                    echo 'file "'.file.'" not ended with .f, might not be a filelist, please notice'
+                endif
+                let s:atv_cd_flist_browse_file = file
+            else
+                echohl ErrorMsg | echo "Your vim has no support for GUI browse!!! Please close s:atv_cd_flist_browse" | echohl None
+            endif
+        else
+            "already browse, don't re-browse again
+            let file = s:atv_cd_flist_browse_file
+        endif
+    else
+        "find global filelist
+        if s:atv_cd_flist_file != ''
+            let file = s:atv_cd_flist_file
+        endif
+        "find filelist by comment
+        if file == ''
+            let [dirlist,rec,vlist,elist,flist,tlist] = s:GetVerilogLib()
+            if flist != []
+                let file = flist[0]
+            endif
+        endif
+        "find filelist by filelist.f file_list.f or last .f file
+        if file == ''
+            let filelist = filter(copy(glob('./'.'*',0,1)),'v:val =~ "\\.f$"')
+            for file in filelist
+                if file =~ 'filelist'
+                    break
+                elseif file =~ 'file_list'
+                    break
+                endif
+            endfor
+        endif
+    endif
+
+    if file == '' 
+        echohl ErrorMsg | echo "Please select at least one filelist file!!!" | echohl None
+    else
+        let file = expand(file)
+        let file = fnamemodify(file,':p')
+        if file != s:atv_cd_flist_selected_file 
+            "not selected
+            echo 'file "'.file.'" selected as filelist'
+            let s:atv_cd_flist_selected_file = file
+        else
+            "already selected, don't echo filelist again unless it's changed
+            let file = s:atv_cd_flist_selected_file
+        endif
+    endif
+
+    return file
+
+endfunction
+"}}}3
+
+"{{{3 GetTags 获取tags
+"--------------------------------------------------
+" Function: GetTags
+" Input: 
+"   1.browse 
+"     browse tag file
+"   2.
+"     global variable s:atv_cd_tags_file
+"   3.
+"     Lines look like: 
+"     verilog-library-flags:("-t filename")
+"   4.
+"     tags
+" Description:
+" e.g
+"   verilog-library-flags:("-t filename")
+" Output:
+"   tags 
+"   e.g. ./tags
+"---------------------------------------------------
+let s:atv_cd_tags_browse_file = ''
+let s:atv_cd_tags_selected_file = ''
+function s:GetTags()
+    let file = ''
+    if s:atv_cd_tags_browse == 1 
+        if s:atv_cd_tags_browse_file == ''
+            if has("browse")
+                let file = browse(0,'Select Your Tags','./','')
+                if file !~ 'tag'
+                    echo 'file "'.file.'" not match tag, might not be a tag, please notice'
+                endif
+                let s:atv_cd_tags_browse_file = file
+            else
+                echohl ErrorMsg | echo "Your vim has no support for GUI browse!!! Please close s:atv_cd_tags_browse" | echohl None
+            endif
+        else
+            "already browse, don't re-browse again
+            let file = s:atv_cd_tags_browse_file
+        endif
+    else
+        "find global tags
+        if s:atv_cd_tags_file != ''
+            let file = s:atv_cd_tags_file
+        endif
+        "find tags by comment
+        if file == ''
+            let [dirlist,rec,vlist,elist,flist,tlist] = s:GetVerilogLib()
+            if tlist !=[]
+                let file = tlist[0]
+            endif
+        endif
+        "find tags 
+        if file == ''
+            let taglist = filter(copy(glob('./'.'*',0,1)),'v:val =~ "tag"')
+            if taglist != []
+                let file = taglist[0]
+            endif
+        endif
+    endif
+
+    if file == '' 
+        echohl ErrorMsg | echo "Please select at least one tag file!!!" | echohl None
+    else
+        let file = expand(file)
+        let file = fnamemodify(file,':p')
+        if file != s:atv_cd_tags_selected_file 
+            "not selected
+            echo 'file "'.file.'" selected as tags'
+            let s:atv_cd_tags_selected_file = file
+        else
+            "already selected, don't echo tags again unless it's changed
+            let file = s:atv_cd_tags_selected_file
+        endif
+        "automatic set tag file for user
+        execute "set tags=".file
+    endif
+
+    return file
+
+endfunction
+"}}}3
+
+"GetFileDirDicFromLib 从Verilog Library获取文件名-文件夹关系{{{3
+"--------------------------------------------------
+" Function : GetFileDirDicFromLib
+" Input: 
+"   dirlist: directory list
+"   rec: recursively
+"   vlist : verilog file list
+"   elist : extension list
+" Description:
+"   get file-dir dictionary from dirlist
+" Output:
+"   files  : file-dir dictionary(.v file)
+"          e.g  ALU.v -> ./hdl/core
+"---------------------------------------------------
+function s:GetFileDirDicFromLib(dirlist,rec,vlist,elist)
+    let files = {}
+    "find file from vlist
+    for vfile in a:vlist
+        if filereadable(vfile)
+            let dir = fnamemodify(vfile,':p:h')
+            let file = fnamemodify(vfile,':p:t')
+            call extend (files,{file : dir})
+        else
+            echohl ErrorMsg | echo "No file ".vfile." exist!"| echohl None
+        endif
+    endfor
+
+    "find file from dirlist(recursively)
+    for dir in a:dirlist
+        let files = s:GetFileDirDicFromLibRec(dir,a:rec,files,a:elist)
+    endfor
+    return files
+endfunction
+
+"--------------------------------------------------
+" Function: GetFileDirDicFromLibRec
+" Input: 
+"   dir : directory
+"   rec : recursive
+"   files : dictionary to store
+"   elist : extension list
+" Description:
+"   rec = 1, recursively get inst-file dictionary (.v or .sv file) 
+"   rec = 0, normally get inst-file dictionary (.v or .sv file)
+" Output:
+"   files : files-directory dictionary(.v or .sv file)
+"---------------------------------------------------
+function s:GetFileDirDicFromLibRec(dir,rec,files,elist)
+    "let filelist = readdir(a:dir,{n -> n =~ '.v$\|.sv$'})
+    if v:version >= 704
+        let filedirlist = glob(a:dir.'/'.'*',0,1)
+    else
+        let filedirlist = split(glob(a:dir.'/'.'*',0))
+    endif
+
+    let idx = 0
+    while idx <len(filedirlist)
+        let file = fnamemodify(filedirlist[idx],':t')
+        let filedirlist[idx] = file
+        let idx = idx + 1
+    endwhile
+
+    "filter file with extesion .v/.sv/other specify extension
+    let filter_str = 'v:val =~ ' . ' ''\.v$'' ' 
+               \. '|| v:val =~ ' . ' ''\.sv$'' '
+    "echo ' ''\.v$'' ' ---> '\.v$'
+    for ext in a:elist
+        let filter_str  = filter_str . '|| v:val =~ ' . ' ''\' . ext . '$'' ' 
+    endfor
+    let filelist = filter(copy(filedirlist),filter_str)
+
+    for file in filelist
+        if has_key(a:files,file)
+            "echohl ErrorMsg | echo "Same file ".file." exist in both ".a:dir." and ".a:files[file]."! Only use one as directory"| echohl None
+        else
+            call extend (a:files,{file : a:dir})
+        endif
+    endfor
+
+    if a:rec
+        "for item in readdir(a:dir)
+        for item in filedirlist
+            if isdirectory(a:dir.'/'.item)
+                call s:GetFileDirDicFromLibRec(a:dir.'/'.item,1,a:files,a:elist)
+            endif
+        endfor
+    endif
+    return a:files
+
+endfunction
+"}}}3
+
+"GetFileDirDicFromFlist 从File List获取文件名-文件夹关系{{{3
+"--------------------------------------------------
+" Function : GetFileDirDicFromFlist
+" Input: 
+"   file : filelist file with absolute directory
+" Description:
+"   get file-dir dictionary from filelist
+"   flist e.g.
+"       -v lib_file
+"       -y lib_dir
+"       +libext+lib_ext
+"       +incdir+lib_dir
+"       ../rtl/test.v
+" Output:
+"   files  : file-dir dictionary(.v file)
+"          e.g  ALU.v -> ./hdl/core
+"---------------------------------------------------
+function s:GetFileDirDicFromFlist(file)
+    let files = {}
+    "get from filelist, no recursive
+    let dirlist =[]
+    let vlist = []
+    let elist = []
+    let rec = 0
+    "read filelist file
+    let flist_dir = fnamemodify(a:file,':p:h')
+    let lines = readfile(a:file)
+    for line in lines
+        "skip comment
+        if line =~ '^\s*\/\/'
+            continue
+        endif
+        let matchflags = '\('.   '-y'           . '\|' .
+                                \'+incdir+'     . '\|' .
+                                \'-v'           . '\|' .
+                                \'+libext+'     . '\)'
+        let flag_list = split(line,matchflags.'\(\s*[^ \-+]\+\)\{1,\}\zs')
+        for flag in flag_list
+            if flag =~ '^\s*-y'
+                let ydir = substitute(flag,'-y','','g')
+                call substitute(ydir,'\zs\S\+\ze','\=add(dirlist,submatch(0))','g')
+            elseif flag =~ '^\s*+incdir+'
+                let incdir = substitute(flag,'+incdir+','','g')
+                call substitute(incdir,'\zs\S\+\ze','\=add(dirlist,submatch(0))','g')
+            elseif flag =~ '^\s*-v'
+                let vfile = substitute(flag,'-v','','g')
+                call substitute(vfile,'\zs\S\+\ze','\=add(vlist,submatch(0))','g')
+            elseif flag =~ '^\s*+libext+'
+                let ext = substitute(flag,'+libext+','','g')
+                call substitute(ext,'\zs\S\+\ze','\=add(elist,submatch(0))','g')
+            elseif flag != ''
+                if filereadable(flist_dir.'/'.flag)
+                    let vfile = flist_dir.'/'.flag
+                    let vfile = expand(vfile)
+                    let vfile = fnamemodify(vfile,':p')
+                    let dir = fnamemodify(vfile,':p:h')
+                    let file = fnamemodify(vfile,':p:t')
+                    call extend (files,{file : dir})
+                else
+                    echohl ErrorMsg | echo "No file ".vfile." exist!"| echohl None
+                endif
+            endif
+        endfor
+    endfor
+
+    "filter duplicate
+    call uniq(dirlist)
+    call uniq(vlist)
+    call uniq(elist)
+
+    "expand directories{{{5
+    "default
+    let dir = '.'       
+    if dirlist == [] 
         let dirlist = [dir]
     endif
     let exp_dirlist = []
@@ -6639,81 +6552,83 @@ function s:GetDirList()
         let dir = substitute(fnamemodify(dir,':p'),'\/$','','')
         call add(exp_dirlist,dir)
     endfor
+    let dirlist = exp_dirlist
+    "}}}5
 
-    return [exp_dirlist,str2nr(rec)]
+    "expand verilog list{{{5
+    let exp_vlist = []
+    for file in vlist
+        let file = expand(file)
+        let file = fnamemodify(file,':p')
+        call add(exp_vlist,file)
+    endfor
+    let vlist = exp_vlist
+    "}}}5
 
-endfunction
-"}}}3
+    "find file from vlist
+    for vfile in vlist
+        if filereadable(vfile)
+            let dir = fnamemodify(vfile,':p:h')
+            let file = fnamemodify(vfile,':p:t')
+            call extend (files,{file : dir})
+        else
+            echohl ErrorMsg | echo "No file ".vfile." exist!"| echohl None
+        endif
+    endfor
 
-"GetFileDirDict 获取文件名文件夹关系{{{3
-"--------------------------------------------------
-" Function : GetFileDirDicFromList
-" Input:
-"   dirlist: directory list
-"   rec: recursively
-" Description:
-"   get file-dir dictionary from dirlist
-" Output:
-"   files  : file-dir dictionary(.v file)
-"          e.g  ALU.v -> ./hdl/core
-"---------------------------------------------------
-function s:GetFileDirDicFromList(dirlist,rec)
-    let files = {}
-    for dir in a:dirlist
-        let files = s:GetFileDirDic(dir,a:rec,files)
+    "find file from dirlist(recursively)
+    for dir in dirlist
+        let files = s:GetFileDirDicFromLibRec(dir,0,files,elist)
     endfor
     return files
 endfunction
+"}}}3
 
+"GetModuleFileDirDicFromTags 从Tags获取{{{3
 "--------------------------------------------------
-" Function: GetFileDirDic
-" Input:
-"   dir : directory
-"   rec : recursive
-"   files : dictionary to store
+" Function : GetModuleFileDirDicFromTags
+" Input: 
+"   file : tags file with absolute directory
 " Description:
-"   rec = 1, recursively get inst-file dictionary (.v or .sv file)
-"   rec = 0, normally get inst-file dictionary (.v or .sv file)
+"   get file-dir dictionary from filelist
+"   tags e.g.
+"   ALU    ../src/aaa/bbb/ccc/ALU.v    /^module ALU($/;"    m
 " Output:
-"   files : files-directory dictionary(.v or .sv file)
+"   files  : file-dir dictionary(.v file)
+"   modules: module-file dictionary
 "---------------------------------------------------
-function s:GetFileDirDic(dir,rec,files)
-    "let filelist = readdir(a:dir,{n -> n =~ '.v$\|.sv$'})
-    let filedirlist = glob(a:dir.'/'.'*',0,1)
-    let idx = 0
-    while idx <len(filedirlist)
-        let file = fnamemodify(filedirlist[idx],':t')
-        let filedirlist[idx] = file
-        let idx = idx + 1
-    endwhile
-
-    let filelist = filter(copy(filedirlist),'v:val =~ "\\.v$" || v:val =~ "\\.sv$"')
-
-    for file in filelist
-        if has_key(a:files,file)
-            echohl ErrorMsg | echo "Same file ".file." exist in both ".a:dir." and ".a:files[file]."! Only use one as directory"| echohl None
-        endif
-        call extend (a:files,{file : a:dir})
-    endfor
-
-    if a:rec
-        "for item in readdir(a:dir)
-        for item in filedirlist
-            if isdirectory(a:dir.'/'.item)
-                call s:GetFileDirDic(a:dir.'/'.item,1,a:files)
+function s:GetModuleFileDirDicFromTags(file)
+    let files = {}
+    let modules = {}
+    "read filelist file
+    let tags_dir = fnamemodify(a:file,':p:h')
+    let lines = readfile(a:file)
+    for line in lines
+        if line =~ '^\w\+\t'
+            let module = matchstr(line,'^\zs\w\+\ze\t')
+            let line = substitute(line,'^\w\+\t','','')
+            let file = substitute(line,'\(^\S\+\)\(.*$\)','\=submatch(1)','')
+            if filereadable(tags_dir.'/'.file)
+                let vfile = tags_dir.'/'.file
+                let vfile = expand(vfile)
+                let vfile = fnamemodify(vfile,':p')
+                let dir = fnamemodify(vfile,':p:h')
+                let file = fnamemodify(vfile,':p:t')
+                call extend(files,{file : dir})
+                call extend(modules,{module : file})
+            else
+                echohl ErrorMsg | echo "No file ".file." exist!"| echohl None
             endif
-        endfor
-    endif
-    return a:files
-
+        endif
+    endfor
+    return [files,modules]
 endfunction
-
 "}}}3
 
 "GetModuleFileDict 获取模块名和文件名关系{{{3
 "--------------------------------------------------
 " Function : GetModuleFileDict
-" Input:
+" Input: 
 "   files: file-dir dictionary
 "          e.g  ALU.v -> ./hdl/core
 " Description:
@@ -6727,12 +6642,25 @@ function s:GetModuleFileDict(files)
     for file in keys(a:files)
         let dir = a:files[file]
         "find module in ./hdl/core/ALU.v
-        let lines = readfile(dir.'/'.file)
+        let lines = readfile(dir.'/'.file)  
         let module = ''
+        let module_flag = 0
         for line in lines
             if line =~ '^\s*module\s*\w\+'
                 let module = matchstr(line,'^\s*module\s*\zs\w\+')
                 break
+            elseif line =~ '^\s*module\s*$'
+                let module_flag = 1
+                continue
+            elseif module_flag == 1
+                if line =~ '^\s*$' || line =~ '^\s*\/\/'
+                    continue
+                elseif line =~ '^\s*\w\+'
+                    let module = matchstr(line,'^\s*\zs\w\+') 
+                    break
+                else
+                    break
+                endif
             endif
         endfor
         if module == ''
@@ -6745,19 +6673,20 @@ function s:GetModuleFileDict(files)
 endfunction
 "}}}3
 
+"Others
 "SkipCommentLine 跳过注释行{{{3
 "--------------------------------------------------
 " Function: SkipCommentLine
-" Input:
+" Input: 
 "   mode : mode for search up/down
 "          0 -> search down
 "          1 -> search up
 "          2 -> search down, but ignore //......
 "          3 -> search up, but ignore //......
 "   idx  : start line index of searching
-"   lines: content of lines for searching
+"   lines: content of lines for searching 
 " Description:
-"   Skip comment line of
+"   Skip comment line of 
 "       1. //..........
 "       2. /*......
 "            ......
@@ -6824,8 +6753,12 @@ function s:SkipCommentLine(mode,idx,lines)
         endif
     endfor
 
-    echohl ErrorMsg | echo "Possibly last line is a comment line"| echohl None
-    return -1
+    if s:skip_cmt_debug == 1
+        echohl ErrorMsg | echo "Possibly last line is a comment line"| echohl None
+        return -1
+    else
+        return idx
+    endif
 
 endfunction
 "}}}3
@@ -6833,7 +6766,7 @@ endfunction
 "Str2Num 字符串转数字（用于sort函数排序）{{{3
 "--------------------------------------------------
 " Function: Str2Num
-" Input:
+" Input: 
 "   string list
 " Description:
 "   convert every string into number
@@ -6851,25 +6784,26 @@ endfunction
 
 "SortNaturalOrder sort函数Funcref（用于sort函数排序）{{{3
 " Comparator function for natural ordering of numbers
-function! SortNaturalOrder(firstNr, secondNr)
+function s:SortNaturalOrder(firstNr, secondNr)
   if a:firstNr < a:secondNr
     return -1
   elseif a:firstNr > a:secondNr
     return 1
-  else
+  else 
     return 0
   endif
 endfunction
 
-if v:version < 704
+if v:version > 704
+    let s:sort_funcref = 'n'
 elseif v:version == 704
-    if has("patch341")
+    if has("patch341") 
         let s:sort_funcref = 'n'
     else
-        let s:sort_funcref = 'SortNaturalOrder'
+        let s:sort_funcref = 's:SortNaturalOrder'
     endif
-else
-    let s:sort_funcref = 'n'
+elseif v:version == 703
+    let s:sort_funcref = 's:SortNaturalOrder'
 endif
 
 "}}}3
@@ -6943,7 +6877,7 @@ function s:oTreeNode.SearchChildNodeByLnum(tree,lnum) "{{{2
                 return node
             else
                 let tmp_node = self.SearchChildNodeByLnum(node,a:lnum)
-                if tmp_node.lnum == a:lnum
+                if tmp_node.lnum == a:lnum 
                     return tmp_node
                 endif
             endif
@@ -7328,7 +7262,7 @@ function s:setupTreeSyntaxHighlighting() "{{{2
     hi def link treeBookmark Statement
     hi def link treeUnresolved WarningMsg
     hi def link treeNull Directory
-    hi def link vlogMacro Macro
+    hi def link vlogMacro Macro 
 endfunction "}}}2
 function s:bindMappings() "{{{2
     nnoremap <buffer><expr> <cr>    matchstr(getline('.'), '\%' . col('.') . 'c.') == '~'
@@ -7485,7 +7419,7 @@ function s:OpenRtlTree() "{{{2
     "reset rtl_tree_is_open when :q
     autocmd QuitPre *._RtlTree_ let s:rtl_tree_is_open = 0
     autocmd QuitPre *._RtlTree_ call delete('tags')
-
+        
     setlocal winfixwidth
 
     "throwaway buffer options
@@ -7544,7 +7478,7 @@ endfunction "}}}2
 "s:GenRtlTags 写Rtl标签{{{2
 "--------------------------------------------------
 " Function: GenRtlTags
-" Input:
+" Input: 
 "   .v file
 "
 " Description:
@@ -7578,7 +7512,7 @@ function s:GenRtlTags(files,modules)
                 "write tag
                 let tag = module . "\t" . file . "\t" . '/^' . module_line . '$'
                 "reaplace // with \/\/
-                let tag = substitute(tag,'\/\/','\\\/\\\/','g')
+                let tag = substitute(tag,'\/\/','\\\/\\\/','g')                   
                 call add(tags,tag)
             endif
         endif
@@ -7594,9 +7528,9 @@ function RtlTree() "{{{2
         "Get tags from top module and search down
         try
             "Get directory list by scaning line
-            let [dirlist,rec] = s:GetDirList()
+            let [dirlist,rec,vlist,elist,flist,tlist] = s:GetVerilogLib()
             "Get file-dir dictionary & module-file dictionary ahead of all process
-            let s:top_files = s:GetFileDirDicFromList(dirlist,rec)
+            let s:top_files = s:GetFileDirDicFromLib(dirlist,rec,vlist,elist)
             let s:top_modules = s:GetModuleFileDict(s:top_files)
         endtry
 
@@ -7631,7 +7565,7 @@ let s:progressbar = {}
 let s:cpo=&cpo
 set cpo-=C
 "Function: NewSimpleProgressBar {{{2
-"Create a new progressbar
+"Create a new progressbar 
 "Args: title   : string
 "      max_value : int
 "      winnr   : int ( optional , default=current_win )
@@ -7641,7 +7575,7 @@ func! NewSimpleProgressBar(title, max_value, ...)
   if !has("statusline")
     return {}
   endif
-  "Optional arg : winnr
+  "Optional arg : winnr 
   let winnr = a:0 ? a:1 : winnr()
   let b = copy(s:progressbar)
   let b.title = a:title
