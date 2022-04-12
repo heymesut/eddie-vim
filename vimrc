@@ -18,14 +18,8 @@ noremap <CR> :nohlsearch<CR>
 " select ALL
 map <C-A> ggVG
 
-
 " interact with clipboard
 vnoremap <C-C> "+y
 nnoremap <C-V> "*p"
 
-" ctags setting
-set tags=./tags;/
-map <C-\> :tab split<CR>:exec("tag ".expand("<cword>"))<CR>
 
-" fix ack search results leak into terminal
-set shellpipe=>

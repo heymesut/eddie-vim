@@ -10,3 +10,7 @@ else
     noremap FF :echo "Sorry, you need to install ack or ag first!"<CR>
   endif
 endif
+
+
+"fix ack search results leak into terminal
+set shellpipe=>
