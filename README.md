@@ -94,6 +94,7 @@ change directory to `~/.vim` and execute `./update.sh` script, it should do all 
 4. Remove tailing whitespace automatically while saving.
 5. Support UVM syntax highlight.
 6. Support [ale](https://github.com/dense-analysis/ale) lint check.
+   1. You should create a `.local.vimrc` in the project root directory to import compilation option, such as include path and dmacro. 
 7. Support Verilog automatic. You can refer to [here](https://github.com/HonkW93/automatic-verilog) for more details.
 
 ## FAQ
