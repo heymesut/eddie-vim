@@ -1,8 +1,8 @@
 "-----------------------------------------------------------------------------
-" Vim Plugin for Verilog Code Automactic Generation 
+" Vim Plugin for Verilog Code Automactic Generation
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2022/01/27 23:13
+" Last Modified:  2022/04/13 17:25
 " File:           snippet.vim
 " Note:           Snippet function partly from zhangguo's vimscript,partly from load_template
 "------------------------------------------------------------------------------
@@ -25,16 +25,16 @@ endfunction
 
 "Defaults 默认设置{{{1
 let g:_ATV_SNIPPET_DEFAULTS = {
-            \'author':      'HonkW',
-            \'company':     'NB Co.,Ltd.',
+            \'author':      'Heymesut',
+            \'company':     '',
             \'project':     'IC_Design',
-            \'device':      'Xilinx',
-            \'email':       'contact@honk.wang',
-            \'website':     'honk.wang',
+            \'device':      '',
+            \'email':       '',
+            \'website':     '',
             \'st_pos':      4,
-            \'clk':         'clk',        
+            \'clk':         'clk',
             \'rst':         'rst',
-            \'rst_n':       'rst_n',    
+            \'rst_n':       'rst_n',
             \'att_en':      1
             \}
 
@@ -139,7 +139,7 @@ function s:AddHeader() "{{{1
     call append(lnum+6,  "// -FHDR----------------------------------------------------------------------------")
     let s:header_lnum = lnum + 6
     call cursor(cursor_lnum,10)
-endfunction 
+endfunction
 "}}}1
 
 "Update Last Modify Time{{{1
