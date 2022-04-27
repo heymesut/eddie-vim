@@ -73,7 +73,7 @@ change directory to `~/.vim` and execute `./update.sh` script, it should do all 
 
     b. `<F3>` to search Buffer with CtrlP plugin.
 
-    c. `<F4>` to toggle Taglist window.
+    c. `<F4>` to toggle Tagbar window.
 
     d. `<F5>` is the script runner, according to it's filetype, it will run Ruby(*.rb) ,Python(*.py) or Javascript(*.js) file(SpiderMonkey is needed), even CoffeeScript(*.coffee, but you may have to install CoffeeScript first). If the filetype is VimScript, `<F5>` will run `:source %` for you.
 
@@ -101,12 +101,6 @@ change directory to `~/.vim` and execute `./update.sh` script, it should do all 
 
 if you can not found `ctags` command, just find your ctags path and replace my settings in `plugin/settings/Ctags.vim` file:
 
-    let Tlist_Ctags_Cmd = '/your/path/to/ctags'
+    let tagbar_ctags_bin = '/your/path/to/ctags'
 
-and [Exuberant Ctags](http://ctags.sourceforge.net/) is recommended.
-
-## Contact
-
-Enjoy it, and if there's any question or comment, feel free to let me know :)
-
-Eddie Kao (eddie@digik.com.tw)
+and [Universal Ctags](https://ctags.io/) is recommended.
