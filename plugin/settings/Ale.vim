@@ -1,7 +1,7 @@
 " Set this option to change lint options
 let g:ale_verilog_verilator_options = '-Wall -sv --lint-only'
 
-let b:ale_linters = {'verilog': ['verilator'],
+let g:ale_linters = {'verilog': ['verilator'],
 \                   'systemverilog': ['verilator'],
 \                   'cpp': ['g++'],
 \                   'c': ['gcc'],
@@ -16,3 +16,5 @@ let g:ale_sign_warning = '⚡'
 nmap <silent> <C-k> <Plug>(ale_previous_wrap)
 nmap <silent> <C-J> <Plug>(ale_next_wrap)
 
+" disable highlights
+let g:ale_set_highlights = 0
